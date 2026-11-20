@@ -26,7 +26,7 @@ html, body, [class*="css"] {
 }
 
 .block-container {
-    padding-top: 2.4rem;
+    padding-top: 2.6rem;
     padding-bottom: 1.5rem;
     padding-left: 1.8rem;
     padding-right: 1.8rem;
@@ -157,6 +157,183 @@ html, body, [class*="css"] {
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+
+# ==========================================
+# 2. 全班共用記憶體狀態 (@st.cache_resource)
+# ==========================================
+@st.cache_resource
+def get_shared_classroom_state():
+    return {
+        "lock": threading.Lock(),
+        "course_title": "課堂即時搶答抽籤",
+        "round_id": 1,
+        "is_open": True,
+        "candidates": {},      # { "05": timestamp }
+        "picked_history": {},  # { "05": count }
+        "last_winners": [],    # ["05", "18"]
+    }
+
+state = get_shared_classroom_state()
+DEFAULT_PIN = "1234"
+
+# ==========================================
+# 3. 個人連線裝置狀態 (st.session_state)
+# ==========================================
+query_mode = st.query_params.get("mode", "")
+if "view_mode" not in st.session_state:
+    st.session_state.view_mode = "admin" if query_mode == "admin" else "student"
+elif query_mode == "admin":
+    st.session_state.view_mode = "admin"
+
+if "admin_unlocked" not in st.session_state:
+    st.session_state.admin_unlocked = False
+if "draw_mode" not in st.session_state:
+    st.session_state.draw_mode = "weighted"
+if "draw_count" not in st.session_state:
+    st.session_state.draw_count = 1
+if "student_saved_num" not in st.session_state:
+    st.session_state.student_saved_num = ""
+if "submitted_round" not in st.session_state:
+    st.session_state.submitted_round = 0
+if "student_url_input" not in st.session_state:
+    st.session_state.student_url_input = "https://bcyyang-class-draw.streamlit.app/"
+if "sound_enabled" not in st.session_state:
+    st.session_state.sound_enabled = True
+if "play_fanfare_once" not in st.session_state:
+    st.session_state.play_fanfare_once = False
+
+# ==========================================
+# 4. 核心工具函式（加權抽籤、QR Code、Web Audio 音效）
+# ==========================================
+def play_sound_effect(kind: str, enabled: bool = True):
+    """透過 Web Audio API 在瀏覽器合成跳號滴答聲與中獎勝利和弦"""
+    if not enabled:
+        return
+    uid = f"{kind}_{time.time()}"
+    if kind == "rolling":
+        js_code = f"""
+        <script>
+        // {uid}
+        (function() {{
+            try {{
+                const AudioCtx = window.parent.AudioContext || window.parent.webkitAudioContext || window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioCtx();
+                if (ctx.state === 'suspended') ctx.resume();
+                for (let i = 0; i < 15; i++) {{
+                    const t = ctx.currentTime + i * 0.085;
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(480 + (i % 5) * 65, t);
+                    gain.gain.setValueAtTime(0.14, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(t);
+                    osc.stop(t + 0.065);
+                }}
+            }} catch (e) {{}}
+        }})();
+        </script>
+        """
+    else:
+        js_code = f"""
+        <script>
+        // {uid}
+        (function() {{
+            try {{
+                const AudioCtx = window.parent.AudioContext || window.parent.webkitAudioContext || window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioCtx();
+                if (ctx.state === 'suspended') ctx.resume();
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, idx) => {{
+                    const t = ctx.currentTime + idx * 0.095;
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, t);
+                    gain.gain.setValueAtTime(0.22, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(t);
+                    osc.stop(t + 0.34);
+                }});
+            }} catch (e) {{}}
+        }})();
+        </script>
+        """
+    components.html(js_code, height=0, width=0)
+
+
+def pick_weighted_candidates(candidates_dict, history_dict, count, weighted=True):
+    pool = list(candidates_dict.keys())
+    selected = []
+    pick_total = min(count, len(pool))
+
+    for _ in range(pick_total):
+        if weighted:
+            weights = [3 if history_dict.get(num, 0) == 0 else 1 for num in pool]
+        else:
+            weights = [1 for _ in pool]
+
+        chosen = random.choices(pool, weights=weights, k=1)[0]
+        selected.append(chosen)
+        pool.remove(chosen)
+
+    return selected
+
+
+def generate_qr_base64(url_text: str) -> str:
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=8,
+        border=2,
+    )
+    qr.add_data(url_text)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#0f172a", back_color="#ffffff")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def render_spotlight_html(winners, rolling=False, total_pool=0):
+    if rolling:
+        pills = "".join(f'<div class="rolling-pill">{num}</div>' for num in winners)
+        inner = (
+            f'<div style="color:#fde047; font-size:0.82rem; font-weight:800; letter-spacing:0.06em; margin-bottom:8px;">'
+            f'🎰 正在從 {total_pool} 位舉手同學中抽出 {len(winners)} 位...</div>'
+            f'<div>{pills}</div>'
+        )
+    elif winners:
+        pills = "".join(
+            f'<div class="winner-pill">'
+            f'<span style="font-size:0.68rem; font-weight:800; color:#78350f;">中籤座號</span>'
+            f'<span style="font-size:2.2rem; font-weight:900; line-height:1.1;">{num}</span>'
+            f'</div>'
+            for num in winners
+        )
+        inner = (
+            f'<div style="color:#fde047; font-size:0.82rem; font-weight:800; letter-spacing:0.06em; margin-bottom:6px;">'
+            f'🎉 恭喜以下同學獲得發言機會！</div>'
+            f'<div>{pills}</div>'
+        )
+    else:
+        inner = (
+            '<div style="color:#c7d2fe; font-size:1rem; font-weight:600;">'
+            '等待同學舉手加入名單後，點擊右側「開始公平抽籤」</div>'
+            '<div style="color:#a5b4fc; font-size:0.78rem; margin-top:4px;">'
+            '抽中後將自動從本題候選名單移除，並更新加權紀錄</div>'
+        )
+    return (
+        '<div class="spotlight-box">'
+        '<div style="text-align:left; font-size:1rem; font-weight:800; margin-bottom:10px;">🎯 本題中籤發言同學</div>'
+        f'<div class="spotlight-inner">{inner}</div>'
+        '</div>'
+    )
+
 
 # ==========================================
 # 5. 頂部精簡視角切換列（縮小高度不佔版面）
