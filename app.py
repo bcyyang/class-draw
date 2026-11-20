@@ -327,26 +327,24 @@ def render_admin_view():
                 ])
                 subtitle = "🎉 恭喜以下同學獲得發言機會！"
             else:
-                cards_html = """
-                <div style="color:#c7d2fe; font-size:1.05rem; font-weight:600;">
-                    等待同學舉手加入名單後，點擊右側「開始公平抽籤」
-                </div>
-                <div style="color:#a5b4fc; font-size:0.8rem; margin-top:6px;">
-                    抽中後將自動從本題候選名單移除，並更新加權紀錄
-                </div>
-                """
+                cards_html = (
+                    '<div style="color:#c7d2fe; font-size:1.05rem; font-weight:600;">'
+                    '等待同學舉手加入名單後，點擊右側「開始公平抽籤」'
+                    '</div>'
+                    '<div style="color:#a5b4fc; font-size:0.8rem; margin-top:6px;">'
+                    '抽中後將自動從本題候選名單移除，並更新加權紀錄'
+                    '</div>'
+                )
                 subtitle = "🎯 本題中籤發言同學"
 
-            return f"""
-            <div class="spotlight-stage">
-                <div style="font-size:0.95rem; font-weight:800; color:#fde047; margin-bottom:14px;">{subtitle}</div>
-                <div class="spotlight-inner">
-                    <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:12px;">
-                        {cards_html}
-                    </div>
-                </div>
-            </div>
-            """
+            return (
+                f'<div class="spotlight-stage">'
+                f'<div style="font-size:0.95rem; font-weight:800; color:#fde047; margin-bottom:14px;">{subtitle}</div>'
+                f'<div class="spotlight-inner">'
+                f'<div style="display:flex; flex-wrap:wrap; justify-content:center; gap:12px;">{cards_html}</div>'
+                f'</div>'
+                f'</div>'
+            )
 
         spotlight_placeholder.markdown(render_spotlight_html(state["last_winners"]), unsafe_allow_html=True)
 
