@@ -305,7 +305,7 @@ def render_spotlight_html(winners, rolling=False, total_pool=0):
         inner = (
             f'<div style="color:#fde047; font-size:0.95rem; font-weight:800; letter-spacing:0.06em; margin-bottom:12px;">'
             f'🎰 正在從 {total_pool} 位舉手同學中抽出 {len(winners)} 位...</div>'
-            f'<div>{pills}</div>'
+            f'<div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:center;">{pills}</div>'
         )
     elif winners:
         pills = "".join(
@@ -317,8 +317,8 @@ def render_spotlight_html(winners, rolling=False, total_pool=0):
         )
         inner = (
             f'<div style="color:#fde047; font-size:0.98rem; font-weight:800; letter-spacing:0.06em; margin-bottom:10px;">'
-            f'🎉 恭喜以下同學獲得發言機會！</div>'
-            f'<div>{pills}</div>'
+            f'🎉 恭喜以下 {len(winners)} 位同學獲得發言機會！</div>'
+            f'<div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:center;">{pills}</div>'
         )
     else:
         inner = (
@@ -529,7 +529,7 @@ if st.session_state.view_mode == "admin":
             st.session_state.draw_count = st.number_input(
                 "本題抽取人數（位）",
                 min_value=1,
-                max_value=10,
+                max_value=50,
                 value=st.session_state.draw_count,
                 step=1,
             )
@@ -560,16 +560,15 @@ if st.session_state.view_mode == "admin":
                             render_spotlight_html(fake_sample, rolling=True, total_pool=len(pool_nums)),
                             unsafe_allow_html=True,
                         )
-        # 2. 本堂課累計發言紀錄（移至 QR Code 上方，放大徽章卡片並向下自然延伸）
-        with st.container(border=True):
-            h_col1, h_col2 = st.columns([3, 1.2])
-            with h_col1:
-                st.markdown("#### 📊 本堂課已發言紀錄")
-            with h_col2:
-                if st.button("重置紀錄", use_container_width=True):
+                        time.sleep(0.085)
+
                     with state["lock"]:
-                        state["picked_history"] = {}
-                    st.toast("已重置本堂課發言紀錄")
+                        for w in winners:
+                            state["candidates"].pop(w, None)
+                            state["picked_history"][w] = state["picked_history"].get(w, 0) + 1
+                        state["last_winners"] = winners
+
+                    st.session_state.play_fanfare_once = True
                     st.rerun()
 
             if not state["picked_history"]:
