@@ -205,6 +205,14 @@ if "play_fanfare_once" not in st.session_state:
 # ==========================================
 # 4. 核心工具函式（加權抽籤、QR Code、Web Audio 音效）
 # ==========================================
+def normalize_seat_num(raw_text: str) -> str:
+    """標準化座號：若為 1~9 的單一數字（如 '5'），自動補零成為 '05'"""
+    clean = raw_text.strip().upper()
+    if clean.isdigit() and len(clean) == 1:
+        return clean.zfill(2)
+    return clean
+
+
 def play_sound_effect(kind: str, enabled: bool = True):
     """透過 Web Audio API 在瀏覽器合成跳號滴答聲與中獎勝利和弦"""
     if not enabled:
@@ -468,7 +476,7 @@ if st.session_state.view_mode == "admin":
                     )
                 with header_c4:
                     if st.button("➕ 加入", use_container_width=True):
-                        clean = manual_num.strip().upper()
+                        clean = normalize_seat_num(manual_num)
                         if clean:
                             with state["lock"]:
                                 state["candidates"][clean] = time.time()
@@ -637,10 +645,33 @@ else:
             )
 
             with st.container(border=True):
-                if already_submitted:
+                last_winners = state.get("last_winners", [])
+                saved_num = st.session_state.student_saved_num
+
+                if already_submitted and saved_num and saved_num in last_winners:
+                    order_num = last_winners.index(saved_num) + 1
+                    st.markdown(
+                        f"""
+                        <div style="background:linear-gradient(135deg, #fde047 0%, #facc15 100%); border:3px solid #eab308; border-radius:20px; padding:24px 16px; text-align:center; color:#0f172a; box-shadow:0 10px 25px rgba(250,204,21,0.35);">
+                            <div style="font-size:2.6rem; line-height:1;">🎉</div>
+                            <div style="display:inline-block; background:#78350f; color:#fef08a; font-size:0.95rem; font-weight:900; padding:4px 16px; border-radius:999px; margin-top:8px;">
+                                第 {order_num} 位發言
+                            </div>
+                            <div style="font-size:1.45rem; font-weight:900; margin-top:10px;">恭喜 {saved_num} 號中籤！</div>
+                            <div style="font-size:0.9rem; font-weight:700; color:#422006; margin-top:6px;">
+                                請準備回答問題 🎤
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                elif already_submitted:
                     st.success(f"✅ 已加入第 **{current_round}** 題候選名單！")
-                    st.markdown(f"你的登記座號：**`{st.session_state.student_saved_num}`**")
-                    st.info("👀 請抬頭看教室大螢幕等待老師抽籤！當老師開啟**下一題**時，此畫面會自動解鎖。")
+                    st.markdown(f"你的登記座號：**`{saved_num}`**")
+                    if last_winners:
+                        st.warning(f"📢 本輪已抽出座號：**{'、'.join(last_winners)}**（若老師繼續加抽仍有機會喔！）")
+                    else:
+                        st.info("👀 請抬頭看教室大螢幕等待老師抽籤！當老師開啟**下一題**時，此畫面會自動解鎖。")
                 elif not is_open:
                     st.warning("⏸️ 本題已截止舉手報名，老師正在進行抽籤或討論中，請等待下一題！")
                 else:
@@ -652,7 +683,7 @@ else:
                     )
                     st.caption("系統會自動記住你的號碼，下一題免重新輸入")
                     if st.button("🙋 舉手搶答！送出號碼", type="primary", use_container_width=True):
-                        clean_num = num_input.strip().upper()
+                        clean_num = normalize_seat_num(num_input)
                         if not clean_num:
                             st.error("請先輸入你的座號！")
                         elif not state["is_open"]:
