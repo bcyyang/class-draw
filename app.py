@@ -33,14 +33,14 @@ html, body, [class*="css"] {
     max-width: 1440px;
 }
 
-/* 候選人卡片樣式（緊湊版，騰出空間給上方中獎舞台） */
+/* 候選人卡片樣式（加大清晰版，向下自然延伸） */
 .candidate-card {
     background: #f8fafc;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 5px 4px;
+    border: 2px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 12px 8px;
     text-align: center;
-    margin-bottom: 6px;
+    margin-bottom: 10px;
     transition: transform 0.15s ease;
 }
 .candidate-card.weighted-top {
@@ -48,30 +48,30 @@ html, body, [class*="css"] {
     background: #fffbeb;
 }
 .candidate-num {
-    font-size: 1.18rem;
+    font-size: 1.75rem;
     font-weight: 900;
     color: #0f172a;
-    line-height: 1.15;
+    line-height: 1.2;
 }
 .badge-3x {
     display: inline-block;
     background: #fbbf24;
     color: #0f172a;
-    font-size: 0.64rem;
+    font-size: 0.75rem;
     font-weight: 900;
-    padding: 1px 6px;
+    padding: 2px 10px;
     border-radius: 999px;
-    margin-top: 2px;
+    margin-top: 5px;
 }
 .badge-1x {
     display: inline-block;
     background: #e2e8f0;
     color: #475569;
-    font-size: 0.64rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    padding: 1px 6px;
+    padding: 2px 10px;
     border-radius: 999px;
-    margin-top: 2px;
+    margin-top: 5px;
 }
 
 /* 聚光燈舞台（加大型主舞台，遠距離投影更清晰） */
@@ -476,14 +476,14 @@ if st.session_state.view_mode == "admin":
 
                 if not sorted_nums:
                     st.markdown(
-                        '<div style="border:2px dashed #cbd5e1; border-radius:14px; padding:20px; text-align:center; background:#f8fafc; color:#64748b; margin-top:4px;">'
-                        '<div style="font-weight:700; font-size:0.9rem;">目前還沒有同學舉手加入本題名單</div>'
-                        '<div style="font-size:0.78rem; margin-top:3px;">請學生掃描右側 QR Code 輸入座號，或點擊「模擬 8 位學生加入」測試</div>'
+                        '<div style="border:2px dashed #cbd5e1; border-radius:16px; padding:42px 20px; text-align:center; background:#f8fafc; color:#64748b; margin-top:6px;">'
+                        '<div style="font-weight:800; font-size:1.05rem;">目前還沒有同學舉手加入本題名單</div>'
+                        '<div style="font-size:0.86rem; margin-top:6px;">請學生掃描右側 QR Code 輸入座號，或點擊「模擬 8 位學生加入」測試</div>'
                         '</div>',
                         unsafe_allow_html=True,
                     )
                 else:
-                    cols = st.columns(6)
+                    cols = st.columns(4)
                     for idx, num in enumerate(sorted_nums):
                         picked_times = history.get(num, 0)
                         is_top = st.session_state.draw_mode == "weighted" and picked_times == 0
@@ -501,7 +501,7 @@ if st.session_state.view_mode == "admin":
                                 else '<span class="badge-1x" style="background:#d1fae5;color:#065f46;">尚未發言</span>'
                             )
 
-                        with cols[idx % 6]:
+                        with cols[idx % 4]:
                             st.markdown(
                                 f'<div class="{card_cls}"><div class="candidate-num">{num}</div>{badge_html}</div>',
                                 unsafe_allow_html=True,
@@ -560,19 +560,7 @@ if st.session_state.view_mode == "admin":
                             render_spotlight_html(fake_sample, rolling=True, total_pool=len(pool_nums)),
                             unsafe_allow_html=True,
                         )
-                        time.sleep(0.085)
-
-                    with state["lock"]:
-                        for w in winners:
-                            state["candidates"].pop(w, None)
-                            state["picked_history"][w] = state["picked_history"].get(w, 0) + 1
-                        state["last_winners"] = winners
-
-                    st.session_state.play_fanfare_once = True
-                    st.balloons()
-                    st.rerun()
-
-        # 2. 本堂課累計發言紀錄（移至 QR Code 上方）
+        # 2. 本堂課累計發言紀錄（移至 QR Code 上方，放大徽章卡片並向下自然延伸）
         with st.container(border=True):
             h_col1, h_col2 = st.columns([3, 1.2])
             with h_col1:
@@ -585,11 +573,23 @@ if st.session_state.view_mode == "admin":
                     st.rerun()
 
             if not state["picked_history"]:
-                st.caption("_尚未抽出任何同學_")
+                st.markdown(
+                    '<div style="padding:14px 12px; border-radius:12px; background:#f8fafc; border:1px dashed #cbd5e1; color:#94a3b8; font-size:0.9rem; text-align:center;">尚未抽出任何同學</div>',
+                    unsafe_allow_html=True,
+                )
             else:
                 sorted_hist = sorted(state["picked_history"].items(), key=lambda x: -x[1])
-                badges = " ".join(f"`{num} ({cnt}次)`" for num, cnt in sorted_hist)
-                st.markdown(badges)
+                badges_html = "".join(
+                    f'<div style="display:inline-flex; align-items:center; gap:8px; background:#f1f5f9; border:2px solid #cbd5e1; border-radius:14px; padding:8px 14px; margin:4px 6px 4px 0;">'
+                    f'<span style="font-size:1.35rem; font-weight:900; color:#0f172a;">{num}</span>'
+                    f'<span style="background:#e0e7ff; color:#3730a3; font-size:0.85rem; font-weight:800; padding:3px 9px; border-radius:999px;">{cnt}次</span>'
+                    f'</div>'
+                    for num, cnt in sorted_hist
+                )
+                st.markdown(
+                    f'<div style="display:flex; flex-wrap:wrap; align-items:center; padding-top:4px;">{badges_html}</div>',
+                    unsafe_allow_html=True,
+                )
 
         # 3. 學生掃碼 QR Code 卡片（移至最下方）
         with st.container(border=True):
