@@ -374,7 +374,7 @@
         <!-- 狀態 A：尚未報名且開放中 -->
         <div id="studentFormState">
           <label for="studentNumberInput" class="block text-sm font-extrabold text-slate-800 mb-2">
-            請輸入你的座號或學號末碼
+            請輸入你的座號
           </label>
           <input id="studentNumberInput" type="text" maxlength="10" placeholder="例如：05 或 28"
             onkeydown="if(event.key==='Enter') submitStudentHand()"
@@ -995,7 +995,7 @@
       const rawVal = input.value.trim().toUpperCase();
 
       if (!rawVal) {
-        showToast('請先輸入你的座號或學號末碼！', 'warning');
+        showToast('請先輸入你的座號！', 'warning');
         input.focus();
         return;
       }
