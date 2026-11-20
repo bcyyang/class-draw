@@ -310,10 +310,10 @@ def render_spotlight_html(winners, rolling=False, total_pool=0):
     elif winners:
         pills = "".join(
             f'<div class="winner-pill">'
-            f'<span style="font-size:0.85rem; font-weight:900; color:#78350f; letter-spacing:0.05em;">中籤座號</span>'
+            f'<span style="background:#78350f; color:#fef08a; font-size:0.82rem; font-weight:900; padding:2px 12px; border-radius:999px; letter-spacing:0.06em; margin-bottom:4px;">第 {idx + 1} 位</span>'
             f'<span style="font-size:3.6rem; font-weight:900; line-height:1.05; margin-top:2px;">{num}</span>'
             f'</div>'
-            for num in winners
+            for idx, num in enumerate(winners)
         )
         inner = (
             f'<div style="color:#fde047; font-size:0.98rem; font-weight:800; letter-spacing:0.06em; margin-bottom:10px;">'
