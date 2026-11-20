@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>課堂即時搶答抽籤系統</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Noto Sans TC & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <!-- QRCode.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+      overflow-x: hidden;
+    }
+
+    /* 候選人卡片進場動畫 */
+    @keyframes popIn {
+      0% {
+        opacity: 0;
+        transform: scale(0.75) translateY(8px);
+      }
+      70% {
+        transform: scale(1.05) translateY(-2px);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    .animate-pop-in {
+      animation: popIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    /* 抽籤滾動閃爍與中獎聚光燈動畫 */
+    @keyframes winnerReveal {
+      0% {
+        opacity: 0;
+        transform: scale(0.5) rotate(-3deg);
+      }
+      60% {
+        transform: scale(1.08) rotate(1deg);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+      }
+    }
+
+    .animate-winner {
+      animation: winnerReveal 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    @keyframes pulseRing {
+      0% {
+        box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.45);
+      }
+      70% {
+        box-shadow: 0 0 0 14px rgba(79, 70, 229, 0);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(79, 70, 229, 0);
+      }
+    }
+
+    .pulse-ring {
+      animation: pulseRing 2s infinite;
+    }
+
+    /* 自訂捲軸 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-indigo-100 selection:text-indigo-900">
+
+  <!-- 頂部快速視角切換列（方便老師在單一視窗測試學生端與老師端） -->
+  <div class="bg-slate-900 text-slate-200 text-xs sm:text-sm px-3 py-2 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 z-40">
+    <div class="flex items-center gap-2">
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+        視角切換器
+      </span>
+      <span class="hidden sm:inline text-slate-400">同網址雙模式（網址加上 <code class="text-amber-300 font-mono">?mode=admin</code> 即為老師端）</span>
+    </div>
+    <div class="flex items-center gap-1.5">
+      <button id="switchStudentBtn" onclick="switchViewMode('student')" class="px-3 py-1 rounded-lg font-semibold transition cursor-pointer">
+        📱 學生手機端
+      </button>
+      <button id="switchAdminBtn" onclick="switchViewMode('admin')" class="px-3 py-1 rounded-lg font-semibold transition cursor-pointer">
+        🖥️ 老師大螢幕端
+      </button>
+    </div>
+  </div>
+
+  <!-- 全域訊息提示框（取代 alert / confirm） -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <!-- ==================== 老師大螢幕端 (ADMIN VIEW) ==================== -->
+  <main id="adminView" class="hidden flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- 老師端 4 碼 PIN 碼鎖定遮罩 -->
+    <div id="adminPinOverlay" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-7 text-center border border-slate-100">
+        <div class="w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto mb-4">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </div>
+        <h2 class="text-xl font-extrabold text-slate-900 mb-1">老師主控台解鎖</h2>
+        <p class="text-sm text-slate-500 mb-5">請輸入 4 碼教師 PIN 碼以操作抽籤控制台<br><span class="text-xs text-indigo-600 font-medium">（預設 PIN 碼：<span class="font-mono font-bold">1234</span>，解鎖後本機將自動記住）</span></p>
+        <input id="pinInput" type="password" inputmode="numeric" maxlength="4" placeholder="••••"
+          class="w-40 text-center text-3xl tracking-[0.5em] font-mono font-bold border-2 border-slate-200 rounded-2xl py-3 px-4 focus:outline-none focus:border-indigo-600 mb-4" />
+        <p id="pinErrorMsg" class="hidden text-xs text-rose-600 font-semibold mb-3">PIN 碼錯誤，請重新輸入</p>
+        <div class="flex gap-2">
+          <button onclick="switchViewMode('student')" class="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition">
+            返回學生端
+          </button>
+          <button onclick="verifyAdminPin()" class="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-md shadow-indigo-200 transition">
+            確認解鎖
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 頂部控制列與狀態標章 -->
+    <header class="bg-white rounded-3xl shadow-sm border border-slate-200/80 p-5 sm:p-6 mb-6">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <!-- 左側：課程標題與題次狀態 -->
+        <div class="space-y-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <span id="connectionBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+              <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+              本機單機測試模式
+            </span>
+            <button onclick="openFirebaseModal()" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-full transition">
+              ⚙️ 設定 Firebase 雲端連線
+            </button>
+            <button onclick="lockAdminConsole()" class="text-xs font-medium text-slate-500 hover:text-slate-700 px-2 py-1 rounded-full hover:bg-slate-100 transition" title="重新鎖定老師控制台">
+              🔒 鎖定
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <input id="courseTitleInput" type="text" value="課堂即時搶答抽籤"
+              onchange="updateCourseTitle(this.value)"
+              class="text-2xl sm:text-3xl font-black text-slate-900 bg-transparent border-b-2 border-transparent hover:border-slate-200 focus:border-indigo-600 focus:outline-none transition w-full max-w-lg py-0.5"
+              title="點擊可直接編輯課程名稱" />
+          </div>
+        </div>
+
+        <!-- 右側：題次指示器與開題按鈕 -->
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-2.5 flex items-center gap-3">
+            <div>
+              <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-500">目前進行題次</div>
+              <div class="text-2xl font-black text-indigo-950">第 <span id="adminRoundNumber">1</span> 題</div>
+            </div>
+            <div class="h-8 w-px bg-indigo-200"></div>
+            <button id="toggleRegBtn" onclick="toggleRegistration()" class="px-3.5 py-2 rounded-xl font-bold text-sm transition flex items-center gap-1.5 shadow-sm">
+              <!-- 由 JS 動態渲染 -->
+            </button>
+          </div>
+
+          <button onclick="confirmNewRound()" class="px-5 py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm sm:text-base shadow-md transition flex items-center gap-2 active:scale-95">
+            <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            開啟新一題 / 清空名單
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 主內容雙欄網格：左側抽籤舞台與候選名單 / 右側 QR Code 與抽籤設定 -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- 左側 8 欄：抽籤結果聚光燈 + 即時候選名單 -->
+      <div class="lg:col-span-8 flex flex-col gap-6">
+
+        <!-- 抽籤結果聚光燈舞台 -->
+        <section class="bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+          <!-- 背景裝飾光暈 -->
+          <div class="absolute -top-24 -right-24 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none"></div>
+          <div class="absolute -bottom-24 -left-24 w-64 h-64 bg-amber-500/15 rounded-full blur-3xl pointer-events-none"></div>
+
+          <div class="relative z-10">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-5">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">🎯</span>
+                <h2 class="text-lg sm:text-xl font-extrabold tracking-wide">本題中籤發言同學</h2>
+              </div>
+              <button id="soundToggleBtn" onclick="toggleSound()" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-indigo-100 transition flex items-center gap-1.5">
+                🔊 音效：開啟
+              </button>
+            </div>
+
+            <!-- 抽籤動畫 / 結果展示區 -->
+            <div id="spotlightStage" class="min-h-[168px] rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-6 flex flex-col items-center justify-center text-center">
+              <p class="text-indigo-200 text-base sm:text-lg font-medium">等待同學舉手加入名單後，點擊右側「開始抽籤」</p>
+              <p class="text-indigo-300/70 text-xs mt-1">抽中後將自動從本題候選名單移除，並更新加權紀錄</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 即時候選名單區 (Live Candidate Pool) -->
+        <section class="bg-white rounded-3xl shadow-sm border border-slate-200/80 p-6 flex-1 flex flex-col">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div class="flex items-center gap-3">
+              <h2 class="text-xl font-extrabold text-slate-900">本題舉手候選名單</h2>
+              <span id="candidateCountBadge" class="px-3 py-1 rounded-full bg-indigo-100 text-indigo-800 text-sm font-black">
+                0 人
+              </span>
+            </div>
+
+            <!-- 快速工具列：模擬學生 & 手動補登 -->
+            <div class="flex flex-wrap items-center gap-2">
+              <button onclick="simulateStudents()" class="px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold transition flex items-center gap-1">
+                ✨ 模擬 8 位學生加入
+              </button>
+              <div class="flex items-center bg-slate-100 rounded-xl p-1">
+                <input id="manualAddInput" type="text" maxlength="10" placeholder="手動輸入座號"
+                  onkeydown="if(event.key==='Enter') manualAddCandidate()"
+                  class="w-28 bg-transparent px-2.5 py-1 text-xs font-bold text-slate-800 focus:outline-none" />
+                <button onclick="manualAddCandidate()" class="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold shadow-xs transition">
+                  + 加入
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 權重提示說明條 -->
+          <div id="weightLegendBar" class="mb-4 px-3.5 py-2.5 rounded-2xl bg-indigo-50/70 border border-indigo-100 text-xs text-indigo-900 flex flex-wrap items-center justify-between gap-2">
+            <span>⚖️ <strong>目前啟用「未曾抽中者優先加權」</strong>：本堂課尚未發言過的同學中籤權重為 <span class="px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 font-black">3x</span>，已發言過為 <span class="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-bold">1x</span>。</span>
+          </div>
+
+          <!-- 候選號碼卡片網格 -->
+          <div id="candidateGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 min-h-[160px] content-start">
+            <!-- 由 JS 動態渲染 -->
+          </div>
+        </section>
+      </div>
+
+      <!-- 右側 4 欄：抽籤控制台 + 學生掃碼 QR Code + 課堂歷史紀錄 -->
+      <div class="lg:col-span-4 flex flex-col gap-6">
+
+        <!-- 抽籤設定與啟動卡片 -->
+        <section class="bg-white rounded-3xl shadow-sm border border-slate-200/80 p-6">
+          <h2 class="text-lg font-extrabold text-slate-900 mb-4 flex items-center gap-2">
+            <span>🎲</span> 抽籤規則與啟動
+          </h2>
+
+          <!-- 抽籤加權模式切換 -->
+          <div class="mb-5">
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">抽籤演算法模式</label>
+            <div class="grid grid-cols-1 gap-2">
+              <button id="modeWeightedBtn" onclick="setDrawMode('weighted')" class="p-3.5 rounded-2xl border-2 text-left transition flex items-start gap-3">
+                <div class="mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0">
+                  <div class="w-2 h-2 rounded-full bg-indigo-600"></div>
+                </div>
+                <div>
+                  <div class="font-extrabold text-sm text-slate-900">未曾抽中者優先加權（推薦）</div>
+                  <div class="text-xs text-slate-500 mt-0.5">本堂課尚未被抽中的舉手同學享有 <strong>3 倍權重</strong>，讓每位願意舉手的同學都有機會輪到。</div>
+                </div>
+              </button>
+
+              <button id="modeEqualBtn" onclick="setDrawMode('equal')" class="p-3.5 rounded-2xl border-2 text-left transition flex items-start gap-3">
+                <div class="mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0">
+                  <div class="w-2 h-2 rounded-full bg-indigo-600"></div>
+                </div>
+                <div>
+                  <div class="font-extrabold text-sm text-slate-900">純粹均等亂數</div>
+                  <div class="text-xs text-slate-500 mt-0.5">所有舉手同學中籤機率完全相同（1x）。</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- 抽取人數設定 -->
+          <div class="mb-6">
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">本題抽取人數</label>
+            <div class="flex items-center justify-between bg-slate-100 rounded-2xl p-2">
+              <button onclick="changeDrawCount(-1)" class="w-11 h-11 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-black text-xl shadow-xs transition active:scale-95">
+                −
+              </button>
+              <div class="text-center">
+                <span id="drawCountDisplay" class="text-2xl font-black text-slate-900">1</span>
+                <span class="text-sm font-bold text-slate-500 ml-1">位同學</span>
+              </div>
+              <button onclick="changeDrawCount(1)" class="w-11 h-11 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-black text-xl shadow-xs transition active:scale-95">
+                +
+              </button>
+            </div>
+          </div>
+
+          <!-- 開始抽籤主按鈕 -->
+          <button id="startDrawBtn" onclick="startLuckyDraw()" class="w-full py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-black text-lg shadow-lg shadow-indigo-200 transition transform active:scale-[0.98] flex items-center justify-center gap-2">
+            <span>🎰</span>
+            <span>開始公平抽籤</span>
+          </button>
+        </section>
+
+        <!-- 學生掃碼加入 QR Code 卡片 -->
+        <section class="bg-white rounded-3xl shadow-sm border border-slate-200/80 p-6 text-center">
+          <h2 class="text-base font-extrabold text-slate-900 mb-1">📱 學生手機掃碼加入</h2>
+          <p class="text-xs text-slate-500 mb-4">掃描下方 QR Code 免登入直接輸入座號</p>
+
+          <div class="inline-flex p-3.5 bg-white rounded-2xl border-2 border-slate-100 shadow-inner mb-3">
+            <div id="studentQrCode"></div>
+          </div>
+
+          <div class="flex items-center gap-2 bg-slate-100 rounded-xl p-2 text-left">
+            <input id="studentUrlInput" type="text" readonly class="bg-transparent text-xs text-slate-600 font-mono w-full focus:outline-none px-1" />
+            <button onclick="copyStudentLink()" class="shrink-0 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition">
+              複製連結
+            </button>
+          </div>
+        </section>
+
+        <!-- 本堂課累計發言紀錄（加權依據） -->
+        <section class="bg-white rounded-3xl shadow-sm border border-slate-200/80 p-6">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-base font-extrabold text-slate-900">📊 本堂課已發言紀錄</h2>
+            <button onclick="resetSessionHistory()" class="text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline">
+              重置紀錄
+            </button>
+          </div>
+          <p class="text-xs text-slate-500 mb-3">系統會自動記錄本堂課已抽中過的號碼，作為「未曾抽中者 3x 加權」的計算依據。</p>
+          <div id="historyBadgesContainer" class="flex flex-wrap gap-2 min-h-[36px]">
+            <span class="text-xs text-slate-400 italic">尚未抽出任何同學</span>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- ==================== 學生手機端 (STUDENT VIEW) ==================== -->
+  <main id="studentView" class="hidden flex-1 flex items-center justify-center px-4 py-8">
+    <div class="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-200/80 overflow-hidden">
+      <!-- 頂部狀態橫幅 -->
+      <div class="bg-indigo-600 px-6 py-6 text-white text-center relative">
+        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-xs font-bold mb-2">
+          <span id="studentConnDot" class="w-2 h-2 rounded-full bg-amber-300"></span>
+          <span id="studentCourseTitle">課堂即時搶答抽籤</span>
+        </div>
+        <h1 class="text-3xl font-black tracking-tight">第 <span id="studentRoundNumber">1</span> 題</h1>
+        <div id="studentRegStatusBadge" class="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-extrabold bg-emerald-400 text-slate-950">
+          ● 開放舉手搶答中
+        </div>
+      </div>
+
+      <!-- 學生端主要互動區 -->
+      <div class="p-6 sm:p-8">
+        <!-- 狀態 A：尚未報名且開放中 -->
+        <div id="studentFormState">
+          <label for="studentNumberInput" class="block text-sm font-extrabold text-slate-800 mb-2">
+            請輸入你的座號或學號末碼
+          </label>
+          <input id="studentNumberInput" type="text" maxlength="10" placeholder="例如：05 或 28"
+            onkeydown="if(event.key==='Enter') submitStudentHand()"
+            class="w-full text-center text-3xl font-black tracking-wider text-slate-900 bg-slate-50 border-2 border-slate-200 focus:border-indigo-600 focus:bg-white rounded-2xl py-4 px-4 mb-2 focus:outline-none transition" />
+          <p class="text-xs text-slate-400 text-center mb-6">系統會自動記住你的號碼，下一題免重新輸入</p>
+
+          <button id="studentSubmitBtn" onclick="submitStudentHand()" class="w-full py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-black text-lg shadow-lg shadow-indigo-200 transition pulse-ring flex items-center justify-center gap-2">
+            <span class="text-2xl">🙋</span>
+            <span>舉手搶答！送出號碼</span>
+          </button>
+        </div>
+
+        <!-- 狀態 B：本題已送出成功（防重複灌水鎖定） -->
+        <div id="studentSubmittedState" class="hidden text-center py-4">
+          <div class="w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4 text-4xl animate-pop-in">
+            ✅
+          </div>
+          <h2 class="text-xl font-black text-slate-900 mb-1">已加入第 <span id="submittedRoundEcho">1</span> 題候選名單！</h2>
+          <p class="text-sm text-slate-500 mb-5">你的號碼：<span id="submittedNumberEcho" class="font-black text-indigo-600 text-lg px-2 py-0.5 bg-indigo-50 rounded-lg"></span></p>
+          <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600 leading-relaxed">
+            👀 請抬頭看教室大螢幕等待老師抽籤！<br>
+            當老師開啟<strong>下一題</strong>時，此畫面會自動解鎖。
+          </div>
+        </div>
+
+        <!-- 狀態 C：老師已截止本題報名 -->
+        <div id="studentClosedState" class="hidden text-center py-6">
+          <div class="w-16 h-16 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-4 text-3xl">
+            ⏸️
+          </div>
+          <h2 class="text-lg font-black text-slate-900 mb-1">本題已截止舉手報名</h2>
+          <p class="text-sm text-slate-500">老師正在進行抽籤或討論中，請等待老師開啟下一題！</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ==================== FIREBASE 連線設定 MODAL ==================== -->
+  <div id="firebaseModal" class="hidden fixed inset-0 bg-slate-900/75 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-7 border border-slate-100">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-xl font-black text-slate-900">⚙️ Firebase 雲端即時連線設定</h3>
+        <button onclick="closeFirebaseModal()" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed mb-4">
+        若要讓<strong>全班學生的手機</strong>即時將座號傳送到<strong>老師大螢幕</strong>，請貼上你的 Firebase 專案設定（需啟用 <strong>Realtime Database</strong> 並將讀寫規則設為測試模式）。<br>
+        未設定時，系統預設使用「本機測試模式」運作。
+      </p>
+
+      <label class="block text-xs font-bold text-slate-700 mb-1.5">貼上 firebaseConfig JSON（包含 databaseURL）：</label>
+      <textarea id="firebaseConfigTextarea" rows="7" placeholder='{
+  "apiKey": "AIzaSy...",
+  "authDomain": "your-app.firebaseapp.com",
+  "databaseURL": "https://your-app-default-rtdb.firebaseio.com",
+  "projectId": "your-app",
+  "storageBucket": "your-app.appspot.com",
+  "messagingSenderId": "123456789",
+  "appId": "1:123456789:web:abcdef"
+}' class="w-full font-mono text-xs bg-slate-50 border border-slate-300 rounded-2xl p-3.5 focus:outline-none focus:border-indigo-600 mb-4"></textarea>
+
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <button onclick="clearFirebaseConfig()" class="px-4 py-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition">
+          清除設定（切回本機模式）
+        </button>
+        <div class="flex items-center gap-2">
+          <button onclick="closeFirebaseModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition">
+            取消
+          </button>
+          <button onclick="saveFirebaseConfig()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md transition">
+            儲存並連線
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 應用程式核心邏輯（模組化載入 Firebase SDK 並整合雙模式狀態機） -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, set, update, remove, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+    // ==================== 1. 全域狀態與本地儲存鍵值 ====================
+    const STORAGE_KEYS = {
+      FIREBASE_CFG: 'classroom_draw_firebase_cfg_v1',
+      LOCAL_STATE: 'classroom_draw_local_state_v1',
+      ADMIN_UNLOCKED: 'classroom_draw_admin_unlocked_v1',
+      STUDENT_NUMBER: 'classroom_draw_student_num_v1',
+      SUBMITTED_ROUND: 'classroom_draw_submitted_round_v1',
+      SOUND_ENABLED: 'classroom_draw_sound_v1'
+    };
+
+    const DEFAULT_PIN = '1234';
+
+    // 核心同步狀態結構
+    let appState = {
+      courseTitle: '課堂即時搶答抽籤',
+      roundId: 1,
+      isOpen: true,
+      candidates: {}, // 格式: { "05": { number: "05", joinedAt: 1710000000 }, ... }
+      pickedHistory: {}, // 格式: { "05": 2, "12": 1 } -> 記錄本堂課累計被抽中次數
+      lastWinners: [] // 格式: ["05", "18"]
+    };
+
+    // UI 與控制狀態
+    let currentView = 'student'; // 'student' | 'admin'
+    let drawMode = 'weighted'; // 'weighted' | 'equal'
+    let drawCount = 1;
+    let isDrawing = false;
+    let soundEnabled = localStorage.getItem(STORAGE_KEYS.SOUND_ENABLED) !== 'false';
+    let isFirebaseConnected = false;
+    let db = null;
+    let qrCodeInstance = null;
+
+    // ==================== 2. Web Audio API 合成音效引擎（免外部音檔） ====================
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+
+    function playTone(freq, type = 'sine', duration = 0.12, volume = 0.15) {
+      if (!soundEnabled) return;
+      try {
+        if (!audioCtx) audioCtx = new AudioCtx();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {
+        // 忽略瀏覽器自動播放限制錯誤
+      }
+    }
+
+    function playTickSound() {
+      playTone(520 + Math.random() * 240, 'triangle', 0.06, 0.12);
+    }
+
+    function playFanfareSound() {
+      if (!soundEnabled) return;
+      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      notes.forEach((freq, idx) => {
+        setTimeout(() => playTone(freq, 'triangle', 0.28, 0.2), idx * 95);
+      });
+    }
+
+    // ==================== 3. 提示訊息元件 (取代 alert / confirm) ====================
+    window.showToast = function (message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const styles = {
+        info: 'bg-slate-900 text-white border-slate-700',
+        success: 'bg-emerald-600 text-white border-emerald-500',
+        warning: 'bg-amber-500 text-slate-950 border-amber-400',
+        error: 'bg-rose-600 text-white border-rose-500'
+      };
+      toast.className = `pointer-events-auto px-4 py-3 rounded-2xl shadow-lg border text-sm font-bold flex items-center justify-between gap-3 animate-pop-in ${styles[type] || styles.info}`;
+      toast.innerHTML = `<span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(6px)';
+        toast.style.transition = 'all 0.25s ease';
+        setTimeout(() => toast.remove(), 250);
+      }, 3200);
+    };
+
+    // ==================== 4. 資料同步層 (Firebase 雲端 vs 本機測試模式) ====================
+    function loadLocalState() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEYS.LOCAL_STATE);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          appState = { ...appState, ...parsed };
+        }
+      } catch (e) {
+        console.error('讀取本機狀態失敗', e);
+      }
+    }
+
+    function saveLocalState() {
+      try {
+        localStorage.setItem(STORAGE_KEYS.LOCAL_STATE, JSON.stringify(appState));
+      } catch (e) {
+        console.error('儲存本機狀態失敗', e);
+      }
+    }
+
+    // 統一寫入狀態函式（自動判斷寫入 Firebase 或本機 localStorage）
+    async function syncStateToBackend(partialUpdate) {
+      appState = { ...appState, ...partialUpdate };
+      if (isFirebaseConnected && db) {
+        try {
+          await update(ref(db, 'classroomSession'), partialUpdate);
+        } catch (err) {
+          console.error('Firebase 寫入失敗:', err);
+          showToast('Firebase 寫入失敗，請檢查資料庫權限規則', 'error');
+        }
+      } else {
+        saveLocalState();
+        renderAllViews();
+      }
+    }
+
+    // 學生加入候選名單（支援併發寫入單一節點）
+    async function addCandidateToBackend(studentNum) {
+      const cleanNum = studentNum.trim().toUpperCase();
+      if (!cleanNum) return;
+
+      const candidateObj = {
+        number: cleanNum,
+        joinedAt: Date.now()
+      };
+
+      if (isFirebaseConnected && db) {
+        try {
+          await set(ref(db, `classroomSession/candidates/${cleanNum}`), candidateObj);
+        } catch (err) {
+          console.error('Firebase 加入候選人失敗:', err);
+          showToast('連線異常，請稍後再試', 'error');
+        }
+      } else {
+        appState.candidates = {
+          ...(appState.candidates || {}),
+          [cleanNum]: candidateObj
+        };
+        saveLocalState();
+        renderAllViews();
+      }
+    }
+
+    // 移除單一候選人
+    window.removeCandidate = async function (studentNum) {
+      if (isFirebaseConnected && db) {
+        try {
+          await remove(ref(db, `classroomSession/candidates/${studentNum}`));
+        } catch (err) {
+          showToast('移除失敗', 'error');
+        }
+      } else {
+        const nextCandidates = { ...(appState.candidates || {}) };
+        delete nextCandidates[studentNum];
+        appState.candidates = nextCandidates;
+        saveLocalState();
+        renderAllViews();
+      }
+    };
+
+    // 初始化 Firebase 連線（若有設定）
+    function initFirebaseIfConfigured() {
+      const rawCfg = localStorage.getItem(STORAGE_KEYS.FIREBASE_CFG);
+      if (!rawCfg) {
+        isFirebaseConnected = false;
+        loadLocalState();
+        renderAllViews();
+        return;
+      }
+
+      try {
+        const config = JSON.parse(rawCfg);
+        if (!config.databaseURL) {
+          throw new Error('缺少 databaseURL');
+        }
+        const app = initializeApp(config);
+        db = getDatabase(app);
+        const sessionRef = ref(db, 'classroomSession');
+
+        // 監聽即時變化
+        onValue(sessionRef, (snapshot) => {
+          isFirebaseConnected = true;
+          const val = snapshot.val();
+          if (val) {
+            appState = {
+              courseTitle: val.courseTitle || '課堂即時搶答抽籤',
+              roundId: val.roundId || 1,
+              isOpen: val.isOpen !== undefined ? val.isOpen : true,
+              candidates: val.candidates || {},
+              pickedHistory: val.pickedHistory || {},
+              lastWinners: val.lastWinners || []
+            };
+          } else {
+            // 若資料庫為空，初始化第一題結構
+            set(sessionRef, appState);
+          }
+          renderAllViews();
+        }, (error) => {
+          console.error('Firebase 監聽錯誤:', error);
+          isFirebaseConnected = false;
+          showToast('Firebase 連線失敗，已切換回本機測試模式', 'error');
+          loadLocalState();
+          renderAllViews();
+        });
+      } catch (err) {
+        console.error('Firebase 初始化錯誤:', err);
+        isFirebaseConnected = false;
+        loadLocalState();
+        renderAllViews();
+      }
+    }
+
+    // 監聽同瀏覽器其他分頁的 localStorage 變化（方便開雙分頁測試）
+    window.addEventListener('storage', (e) => {
+      if (!isFirebaseConnected && e.key === STORAGE_KEYS.LOCAL_STATE) {
+        loadLocalState();
+        renderAllViews();
+      }
+    });
+
+    // ==================== 5. 路由與模式切換 (?mode=admin vs 預設學生端) ====================
+    function detectInitialViewMode() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const modeParam = params.get('mode');
+        currentView = modeParam === 'admin' ? 'admin' : 'student';
+      } catch (e) {
+        currentView = 'student';
+      }
+      applyViewModeUI();
+    }
+
+    window.switchViewMode = function (mode) {
+      currentView = mode;
+      // 在正式 http/https 網址下同步更新網址參數；若在 blob: 預覽沙盒中則安全略過以避免 SecurityError
+      try {
+        if (window.location.protocol.startsWith('http')) {
+          const url = new URL(window.location.href);
+          if (mode === 'admin') {
+            url.searchParams.set('mode', 'admin');
+          } else {
+            url.searchParams.delete('mode');
+          }
+          window.history.replaceState({}, '', url.toString());
+        }
+      } catch (e) {
+        // 預覽環境（blob: 或 sandboxed iframe）不允許 replaceState，直接依狀態切換畫面即可
+      }
+      applyViewModeUI();
+      renderAllViews();
+    };
+
+    function applyViewModeUI() {
+      const adminEl = document.getElementById('adminView');
+      const studentEl = document.getElementById('studentView');
+      const btnStudent = document.getElementById('switchStudentBtn');
+      const btnAdmin = document.getElementById('switchAdminBtn');
+
+      if (currentView === 'admin') {
+        adminEl.classList.remove('hidden');
+        studentEl.classList.add('hidden');
+        btnAdmin.className = 'px-3 py-1 rounded-lg font-bold bg-indigo-600 text-white shadow-xs transition cursor-pointer';
+        btnStudent.className = 'px-3 py-1 rounded-lg font-semibold text-slate-300 hover:bg-slate-800 transition cursor-pointer';
+        checkAdminPinLock();
+        generateStudentQrCode();
+      } else {
+        adminEl.classList.add('hidden');
+        studentEl.classList.remove('hidden');
+        btnStudent.className = 'px-3 py-1 rounded-lg font-bold bg-indigo-600 text-white shadow-xs transition cursor-pointer';
+        btnAdmin.className = 'px-3 py-1 rounded-lg font-semibold text-slate-300 hover:bg-slate-800 transition cursor-pointer';
+      }
+    }
+
+    // ==================== 6. 老師端 PIN 碼安全鎖 ====================
+    function checkAdminPinLock() {
+      const unlocked = localStorage.getItem(STORAGE_KEYS.ADMIN_UNLOCKED) === 'true';
+      const overlay = document.getElementById('adminPinOverlay');
+      if (!unlocked) {
+        overlay.classList.remove('hidden');
+        document.getElementById('pinInput').value = '';
+        document.getElementById('pinErrorMsg').classList.add('hidden');
+      } else {
+        overlay.classList.add('hidden');
+      }
+    }
+
+    window.verifyAdminPin = function () {
+      const val = document.getElementById('pinInput').value.trim();
+      if (val === DEFAULT_PIN) {
+        localStorage.setItem(STORAGE_KEYS.ADMIN_UNLOCKED, 'true');
+        document.getElementById('adminPinOverlay').classList.add('hidden');
+        showToast('老師控制台已解鎖', 'success');
+      } else {
+        document.getElementById('pinErrorMsg').classList.remove('hidden');
+        document.getElementById('pinInput').value = '';
+        document.getElementById('pinInput').focus();
+      }
+    };
+
+    window.lockAdminConsole = function () {
+      localStorage.removeItem(STORAGE_KEYS.ADMIN_UNLOCKED);
+      checkAdminPinLock();
+    };
+
+    document.getElementById('pinInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') window.verifyAdminPin();
+    });
+
+    // ==================== 7. 老師端操作功能 ====================
+    window.updateCourseTitle = function (newTitle) {
+      const title = newTitle.trim() || '課堂即時搶答抽籤';
+      syncStateToBackend({ courseTitle: title });
+      showToast('已更新課程標題', 'success');
+    };
+
+    window.toggleRegistration = function () {
+      const nextOpen = !appState.isOpen;
+      syncStateToBackend({ isOpen: nextOpen });
+      showToast(nextOpen ? '已開放學生舉手報名' : '已截止本題報名', nextOpen ? 'success' : 'warning');
+    };
+
+    let newRoundConfirmTimer = null;
+    window.confirmNewRound = function () {
+      const nextRound = (appState.roundId || 1) + 1;
+      syncStateToBackend({
+        roundId: nextRound,
+        isOpen: true,
+        candidates: {},
+        lastWinners: []
+      });
+      // 重置聚光燈舞台
+      document.getElementById('spotlightStage').innerHTML = `
+        <p class="text-indigo-200 text-base sm:text-lg font-medium">✨ 已開啟第 ${nextRound} 題！學生手機已自動解鎖</p>
+        <p class="text-indigo-300/70 text-xs mt-1">等待同學舉手加入名單後，點擊右側「開始抽籤」</p>
+      `;
+      showToast(`已開啟第 ${nextRound} 題並清空本輪名單`, 'success');
+    };
+
+    window.setDrawMode = function (mode) {
+      drawMode = mode;
+      renderAllViews();
+    };
+
+    window.changeDrawCount = function (delta) {
+      drawCount = Math.max(1, Math.min(10, drawCount + delta));
+      document.getElementById('drawCountDisplay').textContent = drawCount;
+    };
+
+    window.toggleSound = function () {
+      soundEnabled = !soundEnabled;
+      localStorage.setItem(STORAGE_KEYS.SOUND_ENABLED, soundEnabled ? 'true' : 'false');
+      updateSoundButtonUI();
+      if (soundEnabled) playTickSound();
+    };
+
+    function updateSoundButtonUI() {
+      const btn = document.getElementById('soundToggleBtn');
+      if (btn) {
+        btn.innerHTML = soundEnabled ? '🔊 音效：開啟' : '🔇 音效：靜音';
+      }
+    }
+
+    // 手動加入座號
+    window.manualAddCandidate = function () {
+      const input = document.getElementById('manualAddInput');
+      const val = input.value.trim().toUpperCase();
+      if (!val) return;
+      addCandidateToBackend(val);
+      input.value = '';
+      playTickSound();
+    };
+
+    // 模擬 8 位學生加入（方便課前測試或無網路演示）
+    window.simulateStudents = async function () {
+      const samplePool = ['01', '03', '07', '11', '14', '18', '22', '25', '29', '33', '36', '40'];
+      const currentKeys = Object.keys(appState.candidates || {});
+      const available = samplePool.filter(n => !currentKeys.includes(n));
+      const toAdd = available.sort(() => 0.5 - Math.random()).slice(0, 8);
+
+      if (toAdd.length === 0) {
+        showToast('模擬名單中的座號皆已在候選池內', 'info');
+        return;
+      }
+
+      const nextCandidates = { ...(appState.candidates || {}) };
+      toAdd.forEach((num, idx) => {
+        nextCandidates[num] = {
+          number: num,
+          joinedAt: Date.now() + idx
+        };
+      });
+
+      await syncStateToBackend({ candidates: nextCandidates });
+      playTickSound();
+      showToast(`已模擬加入 ${toAdd.length} 位舉手同學`, 'success');
+    };
+
+    // 重置整堂課累計發言加權紀錄
+    window.resetSessionHistory = function () {
+      syncStateToBackend({ pickedHistory: {} });
+      showToast('已重置本堂課發言紀錄，所有人恢復 3x 初始加權', 'info');
+    };
+
+    // ==================== 8. 核心加權抽籤演算法與老虎機動畫 ====================
+    function pickWeightedRandomCandidates(candidateList, count) {
+      const pool = [...candidateList];
+      const selected = [];
+      const history = appState.pickedHistory || {};
+
+      const pickTotal = Math.min(count, pool.length);
+
+      for (let i = 0; i < pickTotal; i++) {
+        // 計算每位候選人的權重
+        const weights = pool.map(item => {
+          if (drawMode === 'equal') return 1;
+          const timesPicked = history[item.number] || 0;
+          // 未曾被抽中者權重 3，已抽中過權重 1
+          return timesPicked === 0 ? 3 : 1;
+        });
+
+        const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+        let randomTicket = Math.random() * totalWeight;
+        let chosenIndex = 0;
+
+        for (let j = 0; j < pool.length; j++) {
+          randomTicket -= weights[j];
+          if (randomTicket <= 0) {
+            chosenIndex = j;
+            break;
+          }
+        }
+
+        selected.push(pool[chosenIndex]);
+        pool.splice(chosenIndex, 1); // 避免同一輪重複抽中同一人
+      }
+
+      return selected;
+    }
+
+    window.startLuckyDraw = function () {
+      if (isDrawing) return;
+      const candidateList = Object.values(appState.candidates || {});
+      if (candidateList.length === 0) {
+        showToast('目前候選名單為空，請先等待學生舉手或點擊模擬加入！', 'warning');
+        return;
+      }
+
+      isDrawing = true;
+      const drawBtn = document.getElementById('startDrawBtn');
+      drawBtn.disabled = true;
+
+      // 執行實際加權/亂數抽選結果
+      const winners = pickWeightedRandomCandidates(candidateList, drawCount);
+      const winnerNumbers = winners.map(w => w.number);
+
+      // 啟動視覺滾動動畫（約 1.8 秒）
+      const stage = document.getElementById('spotlightStage');
+      let ticks = 0;
+      const maxTicks = 22;
+
+      const rollInterval = setInterval(() => {
+        ticks++;
+        playTickSound();
+
+        // 隨機展示跳動號碼卡片
+        const fakeSample = [];
+        for (let k = 0; k < winners.length; k++) {
+          const randItem = candidateList[Math.floor(Math.random() * candidateList.length)];
+          fakeSample.push(randItem.number);
+        }
+
+        stage.innerHTML = `
+          <div class="text-xs font-bold uppercase tracking-widest text-amber-300 mb-3 animate-pulse">
+            🎰 正在從 ${candidateList.length} 位舉手同學中抽出 ${winners.length} 位...
+          </div>
+          <div class="flex flex-wrap items-center justify-center gap-4">
+            ${fakeSample.map(num => `
+              <div class="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-white/20 border-2 border-amber-300/60 flex items-center justify-center text-3xl sm:text-4xl font-black text-white shadow-lg">
+                ${num}
+              </div>
+            `).join('')}
+          </div>
+        `;
+
+        if (ticks >= maxTicks) {
+          clearInterval(rollInterval);
+          finalizeDrawResult(winnerNumbers);
+        }
+      }, 75);
+    };
+
+    async function finalizeDrawResult(winnerNumbers) {
+      playFanfareSound();
+
+      // 1. 從本題候選名單移除已抽中者
+      const nextCandidates = { ...(appState.candidates || {}) };
+      winnerNumbers.forEach(num => {
+        delete nextCandidates[num];
+      });
+
+      // 2. 更新本堂課已發言次數紀錄（作為後續題次加權依據）
+      const nextHistory = { ...(appState.pickedHistory || {}) };
+      winnerNumbers.forEach(num => {
+        nextHistory[num] = (nextHistory[num] || 0) + 1;
+      });
+
+      // 3. 同步更新至後端/本地
+      await syncStateToBackend({
+        candidates: nextCandidates,
+        pickedHistory: nextHistory,
+        lastWinners: winnerNumbers
+      });
+
+      isDrawing = false;
+      document.getElementById('startDrawBtn').disabled = false;
+      showToast(`恭喜座號 ${winnerNumbers.join('、')} 中籤發言！`, 'success');
+    }
+
+    // ==================== 9. 學生手機端送出邏輯 ====================
+    window.submitStudentHand = async function () {
+      if (!appState.isOpen) {
+        showToast('目前本題已截止報名，請等待下一題！', 'warning');
+        return;
+      }
+
+      const input = document.getElementById('studentNumberInput');
+      const rawVal = input.value.trim().toUpperCase();
+
+      if (!rawVal) {
+        showToast('請先輸入你的座號或學號末碼！', 'warning');
+        input.focus();
+        return;
+      }
+
+      // 記住學生座號與本題已送出標記（防同一手機重複灌水）
+      localStorage.setItem(STORAGE_KEYS.STUDENT_NUMBER, rawVal);
+      localStorage.setItem(STORAGE_KEYS.SUBMITTED_ROUND, String(appState.roundId));
+
+      await addCandidateToBackend(rawVal);
+      playFanfareSound();
+      renderStudentView();
+    };
+
+    // ==================== 10. QR Code 與 Firebase 設定 Modal ====================
+    function getStudentShareUrl() {
+      try {
+        if (window.location.protocol.startsWith('http')) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('mode');
+          return url.toString();
+        }
+      } catch (e) {
+        // 忽略非標準協定解析錯誤
+      }
+      // 若在預覽沙盒環境中，顯示提示用範例網址供產生 QR Code
+      return 'https://your-classroom-app.web.app/';
+    }
+
+    function generateStudentQrCode() {
+      const container = document.getElementById('studentQrCode');
+      const urlInput = document.getElementById('studentUrlInput');
+      if (!container || !urlInput) return;
+
+      const studentUrl = getStudentShareUrl();
+      urlInput.value = studentUrl;
+
+      container.innerHTML = '';
+      try {
+        qrCodeInstance = new QRCode(container, {
+          text: studentUrl,
+          width: 148,
+          height: 148,
+          colorDark: '#0f172a',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } catch (e) {
+        container.innerHTML = '<span class="text-xs text-slate-400">QR Code 載入中</span>';
+      }
+    }
+
+    window.copyStudentLink = function () {
+      const input = document.getElementById('studentUrlInput');
+      input.select();
+      input.setSelectionRange(0, 99999);
+      try {
+        document.execCommand('copy');
+        showToast('已複製學生端網址！', 'success');
+      } catch (e) {
+        showToast('請手動全選複製網址', 'info');
+      }
+    };
+
+    window.openFirebaseModal = function () {
+      const saved = localStorage.getItem(STORAGE_KEYS.FIREBASE_CFG) || '';
+      document.getElementById('firebaseConfigTextarea').value = saved;
+      document.getElementById('firebaseModal').classList.remove('hidden');
+    };
+
+    window.closeFirebaseModal = function () {
+      document.getElementById('firebaseModal').classList.add('hidden');
+    };
+
+    window.saveFirebaseConfig = function () {
+      const raw = document.getElementById('firebaseConfigTextarea').value.trim();
+      if (!raw) {
+        showToast('請貼上有效的 JSON 設定', 'warning');
+        return;
+      }
+      try {
+        const parsed = JSON.parse(raw);
+        if (!parsed.databaseURL) {
+          showToast('設定中缺少 "databaseURL" 欄位，請確認是否已建立 Realtime Database', 'error');
+          return;
+        }
+        localStorage.setItem(STORAGE_KEYS.FIREBASE_CFG, JSON.stringify(parsed, null, 2));
+        closeFirebaseModal();
+        showToast('已儲存 Firebase 設定，正在重新連線...', 'success');
+        setTimeout(() => window.location.reload(), 600);
+      } catch (e) {
+        showToast('JSON 格式有誤，請檢查括號與雙引號是否完整', 'error');
+      }
+    };
+
+    window.clearFirebaseConfig = function () {
+      localStorage.removeItem(STORAGE_KEYS.FIREBASE_CFG);
+      closeFirebaseModal();
+      showToast('已清除 Firebase 設定，切回本機測試模式', 'info');
+      setTimeout(() => window.location.reload(), 500);
+    };
+
+    // ==================== 11. 畫面渲染引擎 ====================
+    function renderAllViews() {
+      renderAdminView();
+      renderStudentView();
+    }
+
+    function renderAdminView() {
+      // 1. 連線狀態標章
+      const connBadge = document.getElementById('connectionBadge');
+      if (isFirebaseConnected) {
+        connBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200';
+        connBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Firebase 雲端即時連線中`;
+      } else {
+        connBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200';
+        connBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500"></span> 本機單機測試模式`;
+      }
+
+      // 2. 課程標題與題次
+      const titleInput = document.getElementById('courseTitleInput');
+      if (document.activeElement !== titleInput) {
+        titleInput.value = appState.courseTitle;
+      }
+      document.getElementById('adminRoundNumber').textContent = appState.roundId;
+
+      // 3. 開放/截止報名切換按鈕
+      const regBtn = document.getElementById('toggleRegBtn');
+      if (appState.isOpen) {
+        regBtn.className = 'px-3.5 py-2 rounded-xl font-bold text-sm transition flex items-center gap-1.5 shadow-xs bg-emerald-600 hover:bg-emerald-700 text-white';
+        regBtn.innerHTML = `<span>🟢</span> 報名開放中（點擊截止）`;
+      } else {
+        regBtn.className = 'px-3.5 py-2 rounded-xl font-bold text-sm transition flex items-center gap-1.5 shadow-xs bg-rose-600 hover:bg-rose-700 text-white';
+        regBtn.innerHTML = `<span>🔴</span> 已截止報名（點擊重開）`;
+      }
+
+      // 4. 抽籤模式按鈕外觀與權重說明條
+      const weightedBtn = document.getElementById('modeWeightedBtn');
+      const equalBtn = document.getElementById('modeEqualBtn');
+      const legendBar = document.getElementById('weightLegendBar');
+
+      if (drawMode === 'weighted') {
+        weightedBtn.className = 'p-3.5 rounded-2xl border-2 border-indigo-600 bg-indigo-50/60 text-left transition flex items-start gap-3';
+        weightedBtn.querySelector('div > div').classList.remove('hidden');
+        equalBtn.className = 'p-3.5 rounded-2xl border-2 border-slate-200 hover:border-slate-300 bg-white text-left transition flex items-start gap-3';
+        equalBtn.querySelector('div > div').classList.add('hidden');
+        legendBar.classList.remove('hidden');
+      } else {
+        equalBtn.className = 'p-3.5 rounded-2xl border-2 border-indigo-600 bg-indigo-50/60 text-left transition flex items-start gap-3';
+        equalBtn.querySelector('div > div').classList.remove('hidden');
+        weightedBtn.className = 'p-3.5 rounded-2xl border-2 border-slate-200 hover:border-slate-300 bg-white text-left transition flex items-start gap-3';
+        weightedBtn.querySelector('div > div').classList.add('hidden');
+        legendBar.classList.add('hidden');
+      }
+
+      // 5. 渲染聚光燈最近中籤結果（非動畫期間）
+      if (!isDrawing && appState.lastWinners && appState.lastWinners.length > 0) {
+        const stage = document.getElementById('spotlightStage');
+        stage.innerHTML = `
+          <div class="text-xs font-bold uppercase tracking-widest text-amber-300 mb-3">
+            🎉 恭喜以下同學獲得發言機會！
+          </div>
+          <div class="flex flex-wrap items-center justify-center gap-4">
+            ${appState.lastWinners.map(num => `
+              <div class="animate-winner px-6 py-4 min-w-[112px] rounded-3xl bg-gradient-to-b from-amber-300 to-amber-400 text-slate-950 shadow-xl border-2 border-white flex flex-col items-center justify-center">
+                <span class="text-[11px] font-extrabold uppercase tracking-wider text-amber-900">中籤座號</span>
+                <span class="text-4xl sm:text-5xl font-black tracking-tight mt-0.5">${num}</span>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+
+      // 6. 渲染即時候選名單卡片
+      const candidates = Object.values(appState.candidates || {}).sort((a, b) => a.joinedAt - b.joinedAt);
+      document.getElementById('candidateCountBadge').textContent = `${candidates.length} 人`;
+      const grid = document.getElementById('candidateGrid');
+      const history = appState.pickedHistory || {};
+
+      if (candidates.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full py-12 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+            <p class="text-slate-500 font-bold text-sm">目前還沒有同學舉手加入本題名單</p>
+            <p class="text-slate-400 text-xs mt-1">請學生掃描右側 QR Code 輸入座號，或點擊上方「模擬 8 位學生加入」測試</p>
+          </div>
+        `;
+      } else {
+        grid.innerHTML = candidates.map(item => {
+          const pickedTimes = history[item.number] || 0;
+          const isNeverPicked = pickedTimes === 0;
+          const weightBadge = drawMode === 'weighted'
+            ? (isNeverPicked
+              ? `<span class="px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-400 text-slate-950 shadow-2xs">3x 優先</span>`
+              : `<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-200 text-slate-600">1x (已答${pickedTimes}次)</span>`)
+            : (pickedTimes > 0
+              ? `<span class="px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-500">已答${pickedTimes}次</span>`
+              : `<span class="px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700">尚未發言</span>`);
+
+          return `
+            <div class="animate-pop-in group relative bg-slate-50 hover:bg-indigo-50/60 border-2 ${isNeverPicked && drawMode === 'weighted' ? 'border-amber-300/80' : 'border-slate-200'} rounded-2xl p-3.5 flex flex-col items-center justify-center transition">
+              <button onclick="removeCandidate('${item.number}')" title="從本題名單移除"
+                class="opacity-0 group-hover:opacity-100 absolute top-1.5 right-2 text-slate-400 hover:text-rose-600 font-bold text-sm transition">
+                &times;
+              </button>
+              <div class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-1.5">${item.number}</div>
+              ${weightBadge}
+            </div>
+          `;
+        }).join('');
+      }
+
+      // 7. 渲染本堂課已發言歷史紀錄
+      const historyContainer = document.getElementById('historyBadgesContainer');
+      const historyEntries = Object.entries(history).sort((a, b) => b[1] - a[1]);
+      if (historyEntries.length === 0) {
+        historyContainer.innerHTML = `<span class="text-xs text-slate-400 italic">尚未抽出任何同學</span>`;
+      } else {
+        historyContainer.innerHTML = historyEntries.map(([num, count]) => `
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-700">
+            <span>${num}</span>
+            <span class="px-1.5 py-0.2 rounded-md bg-indigo-100 text-indigo-700 text-[11px]">${count}次</span>
+          </span>
+        `).join('');
+      }
+    }
+
+    function renderStudentView() {
+      document.getElementById('studentCourseTitle').textContent = appState.courseTitle;
+      document.getElementById('studentRoundNumber').textContent = appState.roundId;
+
+      const connDot = document.getElementById('studentConnDot');
+      connDot.className = isFirebaseConnected
+        ? 'w-2 h-2 rounded-full bg-emerald-400 animate-ping'
+        : 'w-2 h-2 rounded-full bg-amber-300';
+
+      const statusBadge = document.getElementById('studentRegStatusBadge');
+      const formState = document.getElementById('studentFormState');
+      const submittedState = document.getElementById('studentSubmittedState');
+      const closedState = document.getElementById('studentClosedState');
+
+      // 預填學生上次輸入過的座號
+      const savedNum = localStorage.getItem(STORAGE_KEYS.STUDENT_NUMBER) || '';
+      const numInput = document.getElementById('studentNumberInput');
+      if (!numInput.value && savedNum) {
+        numInput.value = savedNum;
+      }
+
+      // 檢查該手機是否已在「本題」送出過
+      const submittedRound = Number(localStorage.getItem(STORAGE_KEYS.SUBMITTED_ROUND) || 0);
+      const alreadySubmittedThisRound = submittedRound === Number(appState.roundId);
+
+      if (alreadySubmittedThisRound) {
+        statusBadge.className = 'mt-2 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-extrabold bg-white text-indigo-700';
+        statusBadge.textContent = '✓ 本題已完成舉手登記';
+        formState.classList.add('hidden');
+        closedState.classList.add('hidden');
+        submittedState.classList.remove('hidden');
+        document.getElementById('submittedRoundEcho').textContent = appState.roundId;
+        document.getElementById('submittedNumberEcho').textContent = savedNum || '已登記';
+      } else if (!appState.isOpen) {
+        statusBadge.className = 'mt-2 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-extrabold bg-rose-500 text-white';
+        statusBadge.textContent = '● 本題已截止報名';
+        formState.classList.add('hidden');
+        submittedState.classList.add('hidden');
+        closedState.classList.remove('hidden');
+      } else {
+        statusBadge.className = 'mt-2 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-extrabold bg-emerald-400 text-slate-950';
+        statusBadge.textContent = '● 開放舉手搶答中';
+        submittedState.classList.add('hidden');
+        closedState.classList.add('hidden');
+        formState.classList.remove('hidden');
+      }
+    }
+
+    // ==================== 12. 啟動初始化 ====================
+    window.addEventListener('DOMContentLoaded', () => {
+      updateSoundButtonUI();
+      detectInitialViewMode();
+      initFirebaseIfConfigured();
+    });
+  </script>
+</body>
+</html>
