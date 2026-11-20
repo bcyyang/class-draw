@@ -579,6 +579,20 @@ if st.session_state.view_mode == "admin":
                     st.session_state.play_fanfare_once = True
                     st.rerun()
 
+        # 2. 本堂課已發言紀錄卡片（補回標題與一鍵重置紀錄按鈕）
+        with st.container(border=True):
+            hist_h1, hist_h2 = st.columns([2.6, 1.4])
+            with hist_h1:
+                st.markdown("#### 📊 本堂課已發言紀錄")
+            with hist_h2:
+                if st.button("🗑️ 重置紀錄", use_container_width=True, help="清空所有已發言紀錄，所有人恢復 3x 優先權重"):
+                    with state["lock"]:
+                        state["picked_history"] = {}
+                    st.toast("已清空本堂課已發言紀錄，所有人恢復 3x 優先加權！")
+                    st.rerun()
+
+            st.caption("作為「未曾抽中者 3x 加權」的依據；下課或換班時可點右上角重置。")
+
             if not state["picked_history"]:
                 st.markdown(
                     '<div style="padding:14px 12px; border-radius:12px; background:#f8fafc; border:1px dashed #cbd5e1; color:#94a3b8; font-size:0.9rem; text-align:center;">尚未抽出任何同學</div>',
