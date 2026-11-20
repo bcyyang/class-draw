@@ -391,6 +391,31 @@ if st.session_state.view_mode == "admin":
                     st.error("PIN 碼錯誤，請重新輸入！")
         st.stop()
 
+    # 行動裝置連線守護腳本：防止老師手機瀏覽器休眠導致 WebSocket 停止更新
+    components.html(
+        """
+        <script>
+        (function() {
+            const parentWin = window.parent;
+            if (!parentWin._adminWakeSyncAttached) {
+                parentWin._adminWakeSyncAttached = true;
+                let lastActive = Date.now();
+                parentWin.document.addEventListener("visibilitychange", function() {
+                    if (parentWin.document.visibilityState === "visible") {
+                        if (Date.now() - lastActive > 3000) {
+                            parentWin.location.reload();
+                        }
+                        lastActive = Date.now();
+                    }
+                });
+            }
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
     # --- 頂部課程標題與開題控制列（加寬題次與重置題次按鈕，確保清晰可見） ---
     top_c1, top_c2, top_c2_reset, top_c3, top_c4 = st.columns([3.3, 1.4, 1.3, 2.0, 2.0])
     with top_c1:
@@ -451,20 +476,20 @@ if st.session_state.view_mode == "admin":
 
     # ---------------- 左側 8 欄：抽籤結果聚光燈 + 即時候選名單 ----------------
     with left_col:
-        spotlight_placeholder = st.empty()
-        spotlight_placeholder.markdown(
-            render_spotlight_html(state["last_winners"], rolling=False),
-            unsafe_allow_html=True,
-        )
+        @st.fragment(run_every=2)
+        def live_admin_left_board():
+            spotlight_placeholder = st.empty()
+            spotlight_placeholder.markdown(
+                render_spotlight_html(state["last_winners"], rolling=False),
+                unsafe_allow_html=True,
+            )
 
-        with st.container(border=True):
-            @st.fragment(run_every=2)
-            def live_candidate_board():
+            with st.container(border=True):
                 candidates = state["candidates"]
                 history = state["picked_history"]
                 sorted_nums = sorted(candidates.keys(), key=lambda k: candidates[k])
 
-                header_c1, header_c2, header_c3, header_c4 = st.columns([3.5, 2.2, 2.0, 1.3])
+                header_c1, header_c2, header_c3, header_c4, header_c5 = st.columns([3.0, 2.0, 1.8, 1.1, 1.1])
                 with header_c1:
                     st.markdown(f"#### 🙋 本題舉手候選名單（{len(sorted_nums)} 人）")
                 with header_c2:
@@ -476,7 +501,7 @@ if st.session_state.view_mode == "admin":
                             now_ts = time.time()
                             for idx, num in enumerate(to_add):
                                 state["candidates"][num] = now_ts + idx * 0.01
-                        st.rerun()
+                        st.rerun(scope="app")
                 with header_c3:
                     manual_num = st.text_input(
                         "手動座號",
@@ -490,7 +515,10 @@ if st.session_state.view_mode == "admin":
                         if clean:
                             with state["lock"]:
                                 state["candidates"][clean] = time.time()
-                            st.rerun()
+                            st.rerun(scope="app")
+                with header_c5:
+                    if st.button("🔄 同步", use_container_width=True, help="立即從伺服器同步最新名單與中籤畫面"):
+                        st.rerun(scope="app")
 
                 if not sorted_nums:
                     st.markdown(
@@ -525,7 +553,9 @@ if st.session_state.view_mode == "admin":
                                 unsafe_allow_html=True,
                             )
 
-            live_candidate_board()
+            return spotlight_placeholder
+
+        spotlight_placeholder = live_admin_left_board()
 
     # ---------------- 右側 4 欄：抽籤規則 + 已發言紀錄 + QR Code ----------------
     with right_col:
@@ -585,42 +615,42 @@ if st.session_state.view_mode == "admin":
                             state["candidates"].pop(w, None)
                             state["picked_history"][w] = state["picked_history"].get(w, 0) + 1
                         state["last_winners"] = winners
+        # 2. 本堂課已發言紀錄卡片（支援每 2 秒即時同步多裝置紀錄）
+        @st.fragment(run_every=2)
+        def live_admin_history_card():
+            with st.container(border=True):
+                hist_h1, hist_h2 = st.columns([2.6, 1.4])
+                with hist_h1:
+                    st.markdown("#### 📊 本堂課已發言紀錄")
+                with hist_h2:
+                    if st.button("🗑️ 重置紀錄", use_container_width=True, help="清空所有已發言紀錄，所有人恢復 3x 優先權重"):
+                        with state["lock"]:
+                            state["picked_history"] = {}
+                        st.toast("已清空本堂課已發言紀錄，所有人恢復 3x 優先加權！")
+                        st.rerun(scope="app")
 
-                    st.session_state.play_fanfare_once = True
-                    st.rerun()
+                st.caption("作為「未曾抽中者 3x 加權」的依據；下課或換班時可點右上角重置。")
 
-        # 2. 本堂課已發言紀錄卡片（補回標題與一鍵重置紀錄按鈕）
-        with st.container(border=True):
-            hist_h1, hist_h2 = st.columns([2.6, 1.4])
-            with hist_h1:
-                st.markdown("#### 📊 本堂課已發言紀錄")
-            with hist_h2:
-                if st.button("🗑️ 重置紀錄", use_container_width=True, help="清空所有已發言紀錄，所有人恢復 3x 優先權重"):
-                    with state["lock"]:
-                        state["picked_history"] = {}
-                    st.toast("已清空本堂課已發言紀錄，所有人恢復 3x 優先加權！")
-                    st.rerun()
+                if not state["picked_history"]:
+                    st.markdown(
+                        '<div style="padding:14px 12px; border-radius:12px; background:#f8fafc; border:1px dashed #cbd5e1; color:#94a3b8; font-size:0.9rem; text-align:center;">尚未抽出任何同學</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    sorted_hist = sorted(state["picked_history"].items(), key=lambda x: -x[1])
+                    badges_html = "".join(
+                        f'<div style="display:inline-flex; align-items:center; gap:8px; background:#f1f5f9; border:2px solid #cbd5e1; border-radius:14px; padding:8px 14px; margin:4px 6px 4px 0;">'
+                        f'<span style="font-size:1.35rem; font-weight:900; color:#0f172a;">{num}</span>'
+                        f'<span style="background:#e0e7ff; color:#3730a3; font-size:0.85rem; font-weight:800; padding:3px 9px; border-radius:999px;">{cnt}次</span>'
+                        f'</div>'
+                        for num, cnt in sorted_hist
+                    )
+                    st.markdown(
+                        f'<div style="display:flex; flex-wrap:wrap; align-items:center; padding-top:4px;">{badges_html}</div>',
+                        unsafe_allow_html=True,
+                    )
 
-            st.caption("作為「未曾抽中者 3x 加權」的依據；下課或換班時可點右上角重置。")
-
-            if not state["picked_history"]:
-                st.markdown(
-                    '<div style="padding:14px 12px; border-radius:12px; background:#f8fafc; border:1px dashed #cbd5e1; color:#94a3b8; font-size:0.9rem; text-align:center;">尚未抽出任何同學</div>',
-                    unsafe_allow_html=True,
-                )
-            else:
-                sorted_hist = sorted(state["picked_history"].items(), key=lambda x: -x[1])
-                badges_html = "".join(
-                    f'<div style="display:inline-flex; align-items:center; gap:8px; background:#f1f5f9; border:2px solid #cbd5e1; border-radius:14px; padding:8px 14px; margin:4px 6px 4px 0;">'
-                    f'<span style="font-size:1.35rem; font-weight:900; color:#0f172a;">{num}</span>'
-                    f'<span style="background:#e0e7ff; color:#3730a3; font-size:0.85rem; font-weight:800; padding:3px 9px; border-radius:999px;">{cnt}次</span>'
-                    f'</div>'
-                    for num, cnt in sorted_hist
-                )
-                st.markdown(
-                    f'<div style="display:flex; flex-wrap:wrap; align-items:center; padding-top:4px;">{badges_html}</div>',
-                    unsafe_allow_html=True,
-                )
+        live_admin_history_card()
 
         # 3. 學生掃碼 QR Code 卡片（移至最下方）
         with st.container(border=True):
@@ -642,6 +672,31 @@ if st.session_state.view_mode == "admin":
 # 7. 學生手機端 (STUDENT VIEW)
 # ==========================================
 else:
+    # 注入前端喚醒偵測：當手機點亮螢幕或切回瀏覽器分頁時，自動重新同步最新抽籤結果
+    components.html(
+        """
+        <script>
+        (function() {
+            const parentWin = window.parent;
+            if (!parentWin._wakeSyncAttached) {
+                parentWin._wakeSyncAttached = true;
+                let lastActive = Date.now();
+                parentWin.document.addEventListener("visibilitychange", function() {
+                    if (parentWin.document.visibilityState === "visible") {
+                        if (Date.now() - lastActive > 4000) {
+                            parentWin.location.reload();
+                        }
+                        lastActive = Date.now();
+                    }
+                });
+            }
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
     _, stu_col, _ = st.columns([1, 1.4, 1])
     with stu_col:
 
@@ -669,8 +724,8 @@ else:
             )
 
             with st.container(border=True):
-                last_winners = state.get("last_winners", [])
-                saved_num = st.session_state.student_saved_num
+                last_winners = list(state.get("last_winners", []))
+                saved_num = normalize_seat_num(st.session_state.student_saved_num)
 
                 if already_submitted and saved_num and saved_num in last_winners:
                     order_num = last_winners.index(saved_num) + 1
@@ -696,8 +751,13 @@ else:
                         st.warning(f"📢 本輪已抽出座號：**{'、'.join(last_winners)}**（若老師繼續加抽仍有機會喔！）")
                     else:
                         st.info("👀 請抬頭看教室大螢幕等待老師抽籤！當老師開啟**下一題**時，此畫面會自動解鎖。")
+
+                    if st.button("🔄 立即刷新最新抽籤結果", use_container_width=True):
+                        st.rerun(scope="app")
                 elif not is_open:
                     st.warning("⏸️ 本題已截止舉手報名，老師正在進行抽籤或討論中，請等待下一題！")
+                    if st.button("🔄 檢查是否已開啟下一題", use_container_width=True):
+                        st.rerun(scope="app")
                 else:
                     num_input = st.text_input(
                         "請輸入你的座號",
@@ -717,6 +777,6 @@ else:
                                 state["candidates"][clean_num] = time.time()
                             st.session_state.student_saved_num = clean_num
                             st.session_state.submitted_round = current_round
-                            st.rerun()
+                            st.rerun(scope="app")
 
         student_live_panel()
