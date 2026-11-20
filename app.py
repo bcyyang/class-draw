@@ -26,19 +26,21 @@ html, body, [class*="css"] {
 }
 
 .block-container {
-    padding-top: 3.5rem;
-    padding-bottom: 2rem;
-    max-width: 1280px;
+    padding-top: 2.6rem;
+    padding-bottom: 0.8rem;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    max-width: 1480px;
 }
 
-/* 候選人卡片樣式 */
+/* 緊湊型候選人卡片樣式 */
 .candidate-card {
     background: #f8fafc;
     border: 2px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 12px 8px;
+    border-radius: 12px;
+    padding: 6px 4px;
     text-align: center;
-    margin-bottom: 10px;
+    margin-bottom: 6px;
     transition: transform 0.15s ease;
 }
 .candidate-card.weighted-top {
@@ -46,48 +48,48 @@ html, body, [class*="css"] {
     background: #fffbeb;
 }
 .candidate-num {
-    font-size: 1.75rem;
+    font-size: 1.35rem;
     font-weight: 900;
     color: #0f172a;
-    line-height: 1.2;
+    line-height: 1.15;
 }
 .badge-3x {
     display: inline-block;
     background: #fbbf24;
     color: #0f172a;
-    font-size: 0.72rem;
+    font-size: 0.65rem;
     font-weight: 900;
-    padding: 2px 8px;
+    padding: 1px 6px;
     border-radius: 999px;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 .badge-1x {
     display: inline-block;
     background: #e2e8f0;
     color: #475569;
-    font-size: 0.72rem;
+    font-size: 0.65rem;
     font-weight: 700;
-    padding: 2px 8px;
+    padding: 1px 6px;
     border-radius: 999px;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
-/* 聚光燈舞台 */
+/* 緊湊型聚光燈舞台 */
 .spotlight-box {
     background: linear-gradient(135deg, #1e1b4b 0%, #312e81 55%, #0f172a 100%);
-    border-radius: 24px;
-    padding: 28px 24px;
+    border-radius: 18px;
+    padding: 14px 16px;
     color: #ffffff;
     text-align: center;
-    box-shadow: 0 12px 28px rgba(30, 27, 75, 0.22);
-    margin-bottom: 18px;
+    box-shadow: 0 8px 20px rgba(30, 27, 75, 0.2);
+    margin-bottom: 10px;
 }
 .spotlight-inner {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 18px;
-    padding: 22px 16px;
-    min-height: 148px;
+    border-radius: 14px;
+    padding: 12px 10px;
+    min-height: 112px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -98,27 +100,27 @@ html, body, [class*="css"] {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-width: 108px;
-    padding: 14px 22px;
-    margin: 6px;
-    border-radius: 22px;
+    min-width: 84px;
+    padding: 8px 14px;
+    margin: 4px;
+    border-radius: 16px;
     background: linear-gradient(180deg, #fde047 0%, #facc15 100%);
     color: #0f172a;
-    border: 3px solid #ffffff;
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
+    border: 2px solid #ffffff;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
 }
 .rolling-pill {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 96px;
-    height: 96px;
-    margin: 6px;
-    border-radius: 22px;
+    width: 72px;
+    height: 72px;
+    margin: 4px;
+    border-radius: 16px;
     background: rgba(255, 255, 255, 0.18);
     border: 2px solid rgba(253, 224, 71, 0.7);
     color: #ffffff;
-    font-size: 2.2rem;
+    font-size: 1.75rem;
     font-weight: 900;
 }
 
@@ -251,34 +253,34 @@ def render_spotlight_html(winners, rolling=False, total_pool=0):
     if rolling:
         pills = "".join(f'<div class="rolling-pill">{num}</div>' for num in winners)
         inner = (
-            f'<div style="color:#fde047; font-size:0.85rem; font-weight:800; letter-spacing:1px; margin-bottom:10px;">'
-            f'🎰 正在從 {total_pool} 位舉手同學中抽出 {len(winners)} 位...</div>'
+            f'<div style="color:#fde047; font-size:0.78rem; font-weight:800; margin-bottom:6px;">'
+            f'🎰 正在從 {total_pool} 位中抽出 {len(winners)} 位...</div>'
             f'<div>{pills}</div>'
         )
     elif winners:
         pills = "".join(
             f'<div class="winner-pill">'
-            f'<span style="font-size:0.7rem; font-weight:800; color:#78350f;">中籤座號</span>'
-            f'<span style="font-size:2.3rem; font-weight:900; line-height:1.1;">{num}</span>'
+            f'<span style="font-size:0.65rem; font-weight:800; color:#78350f;">中籤座號</span>'
+            f'<span style="font-size:1.85rem; font-weight:900; line-height:1.05;">{num}</span>'
             f'</div>'
             for num in winners
         )
         inner = (
-            f'<div style="color:#fde047; font-size:0.85rem; font-weight:800; letter-spacing:1px; margin-bottom:10px;">'
+            f'<div style="color:#fde047; font-size:0.78rem; font-weight:800; margin-bottom:4px;">'
             f'🎉 恭喜以下同學獲得發言機會！</div>'
             f'<div>{pills}</div>'
         )
     else:
         inner = (
-            '<div style="color:#c7d2fe; font-size:1.05rem; font-weight:600;">'
-            '等待同學舉手加入名單後，點擊右側「開始公平抽籤」</div>'
-            '<div style="color:#a5b4fc; font-size:0.8rem; margin-top:6px;">'
-            '抽中後將自動從本題候選名單移除，並更新加權紀錄</div>'
+            '<div style="color:#c7d2fe; font-size:0.92rem; font-weight:600;">'
+            '等待同學舉手後，點擊下方「開始公平抽籤」</div>'
+            '<div style="color:#a5b4fc; font-size:0.72rem; margin-top:4px;">'
+            '抽中自動移出本題名單並更新加權紀錄</div>'
         )
 
     return (
         '<div class="spotlight-box">'
-        '<div style="text-align:left; font-size:1.15rem; font-weight:800; margin-bottom:14px;">🎯 本題中籤發言同學</div>'
+        '<div style="text-align:left; font-size:0.95rem; font-weight:800; margin-bottom:8px;">🎯 本題中籤發言同學</div>'
         f'<div class="spotlight-inner">{inner}</div>'
         '</div>'
     )
@@ -364,37 +366,38 @@ if st.session_state.view_mode == "admin":
         st.stop()
 
     # --- 頂部課程標題與開題控制列 ---
-    top_c1, top_c2, top_c3, top_c4 = st.columns([4.2, 1.8, 2, 2])
+    # --- 頂部緊湊控制列（標題 + 題次 + 開閉報名 + 開啟新一題 + 視角切換 全部濃縮在單一列） ---
+    top_c1, top_c2, top_c3, top_c4, top_c5 = st.columns([3.2, 1.3, 2.2, 2.2, 1.6])
     with top_c1:
         new_title = st.text_input(
-            "課程名稱（可直接點擊修改）",
+            "課程名稱",
             value=state["course_title"],
             label_visibility="collapsed",
         )
         if new_title.strip() and new_title != state["course_title"]:
             with state["lock"]:
                 state["course_title"] = new_title.strip()
-        st.markdown(f"## {state['course_title']}")
 
     with top_c2:
-        st.metric(label="目前進行題次", value=f"第 {state['round_id']} 題")
+        st.markdown(
+            f'<div style="background:#eef2ff; border:1px solid #c7d2fe; border-radius:10px; padding:5px 10px; text-align:center; font-weight:900; color:#1e1b4b; font-size:1.05rem;">第 {state["round_id"]} 題</div>',
+            unsafe_allow_html=True,
+        )
 
     with top_c3:
-        st.write("")
         if state["is_open"]:
-            if st.button("🟢 報名開放中（點擊截止）", use_container_width=True):
+            if st.button("🟢 開放中（點擊截止）", use_container_width=True):
                 with state["lock"]:
                     state["is_open"] = False
                 st.rerun()
         else:
-            if st.button("🔴 已截止報名（點擊重開）", use_container_width=True):
+            if st.button("🔴 已截止（點擊重開）", use_container_width=True):
                 with state["lock"]:
                     state["is_open"] = True
                 st.rerun()
 
     with top_c4:
-        st.write("")
-        if st.button("🔄 開啟新一題 / 清空名單", type="primary", use_container_width=True):
+        if st.button("🔄 開啟新一題 / 清空", type="primary", use_container_width=True):
             with state["lock"]:
                 state["round_id"] += 1
                 state["is_open"] = True
@@ -403,133 +406,136 @@ if st.session_state.view_mode == "admin":
             st.toast(f"✨ 已開啟第 {state['round_id']} 題，全班手機已自動解鎖！")
             st.rerun()
 
+    with top_c5:
+        if st.button("📱 切學生端", use_container_width=True):
+            st.session_state.view_mode = "student"
+            st.query_params.clear()
+            st.rerun()
+
     # 若剛完成抽籤，觸發一次勝利和弦音效
     if st.session_state.play_fanfare_once:
         play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
         st.session_state.play_fanfare_once = False
 
-    # --- 主畫面雙欄：左側抽籤舞台與候選名單（8份） / 右側抽籤設定與 QR Code（4份） ---
-    left_col, right_col = st.columns([8, 4], gap="large")
+    # --- 主畫面三欄並排：左（候選名單 5份）/ 中（中籤聚光燈＋抽籤規則 4份）/ 右（QR Code＋已發言紀錄 3份） ---
+    col_list, col_draw, col_qr = st.columns([5, 4, 3], gap="medium")
 
-    # ---------------- 左側欄位 ----------------
-    with left_col:
-        spotlight_placeholder = st.empty()
-        spotlight_placeholder.markdown(
-            render_spotlight_html(state["last_winners"], rolling=False),
-            unsafe_allow_html=True,
-        )
+    # ---------------- 左欄：即時候選名單區 ----------------
+    with col_list:
+        with st.container(border=True):
+            @st.fragment(run_every=2)
+            def live_candidate_board():
+                candidates = state["candidates"]
+                history = state["picked_history"]
+                sorted_nums = sorted(candidates.keys(), key=lambda k: candidates[k])
 
-        # 即時候選名單區（使用 fragment 每 2 秒自動同步全班手機送出的名單）
-        @st.fragment(run_every=2)
-        def live_candidate_board():
-            candidates = state["candidates"]
-            history = state["picked_history"]
-            sorted_nums = sorted(candidates.keys(), key=lambda k: candidates[k])
+                h1, h2 = st.columns([1.4, 1])
+                with h1:
+                    st.markdown(f"**🙋 本題舉手名單（{len(sorted_nums)} 人）**")
+                with h2:
+                    if st.button("✨ 模擬 8 人", use_container_width=True):
+                        sample_pool = ["01", "03", "07", "11", "14", "18", "22", "25", "29", "33", "36", "40"]
+                        available = [n for n in sample_pool if n not in state["candidates"]]
+                        to_add = random.sample(available, min(8, len(available)))
+                        with state["lock"]:
+                            now_ts = time.time()
+                            for idx, num in enumerate(to_add):
+                                state["candidates"][num] = now_ts + idx * 0.01
+                        st.rerun()
 
-            head_c1, head_c2, head_c3 = st.columns([4, 3, 3])
-            with head_c1:
-                st.markdown(f"### 🙋 本題舉手候選名單（**{len(sorted_nums)} 人**）")
-            with head_c2:
-                if st.button("✨ 模擬 8 位學生加入", use_container_width=True):
-                    sample_pool = ["01", "03", "07", "11", "14", "18", "22", "25", "29", "33", "36", "40"]
-                    available = [n for n in sample_pool if n not in state["candidates"]]
-                    to_add = random.sample(available, min(8, len(available)))
-                    with state["lock"]:
-                        now_ts = time.time()
-                        for idx, num in enumerate(to_add):
-                            state["candidates"][num] = now_ts + idx * 0.01
-                    st.rerun()
-            with head_c3:
-                manual_col1, manual_col2 = st.columns([2, 1])
-                with manual_col1:
+                m1, m2 = st.columns([3, 1])
+                with m1:
                     manual_num = st.text_input(
                         "手動補登座號",
-                        placeholder="手動座號",
+                        placeholder="手動補登座號...",
                         label_visibility="collapsed",
                         key="manual_add_box",
                     )
-                with manual_col2:
-                    if st.button("➕", help="手動加入座號", use_container_width=True):
+                with m2:
+                    if st.button("➕ 加入", use_container_width=True):
                         clean = manual_num.strip().upper()
                         if clean:
                             with state["lock"]:
                                 state["candidates"][clean] = time.time()
                             st.rerun()
 
-            if st.session_state.draw_mode == "weighted":
-                st.info("⚖️ **目前啟用「未曾抽中者優先加權」**：本堂課尚未發言過的同學中籤權重為 **3x 優先**，已發言過為 **1x**。")
+                if not sorted_nums:
+                    st.markdown(
+                        '<div style="border:2px dashed #cbd5e1; border-radius:14px; padding:42px 12px; text-align:center; background:#f8fafc; color:#64748b; margin-top:6px;">'
+                        '<div style="font-weight:700; font-size:0.88rem;">尚無同學舉手加入本題名單</div>'
+                        '<div style="font-size:0.75rem; margin-top:4px;">請掃描右側 QR Code 或點「模擬 8 人」測試</div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    cols = st.columns(4)
+                    for idx, num in enumerate(sorted_nums):
+                        picked_times = history.get(num, 0)
+                        is_top = st.session_state.draw_mode == "weighted" and picked_times == 0
+                        card_cls = "candidate-card weighted-top" if is_top else "candidate-card"
+                        if st.session_state.draw_mode == "weighted":
+                            badge_html = (
+                                '<span class="badge-3x">3x 優先</span>'
+                                if picked_times == 0
+                                else f'<span class="badge-1x">1x (答{picked_times})</span>'
+                            )
+                        else:
+                            badge_html = (
+                                f'<span class="badge-1x">已答{picked_times}次</span>'
+                                if picked_times > 0
+                                else '<span class="badge-1x" style="background:#d1fae5;color:#065f46;">未發言</span>'
+                            )
 
-            if not sorted_nums:
-                st.markdown(
-                    """
-                    <div style="border:2px dashed #cbd5e1; border-radius:18px; padding:36px 16px; text-align:center; background:#f8fafc; color:#64748b;">
-                        <div style="font-weight:700; font-size:0.95rem;">目前還沒有同學舉手加入本題名單</div>
-                        <div style="font-size:0.8rem; margin-top:4px;">請學生掃描右側 QR Code 輸入座號，或點擊上方「模擬 8 位學生加入」測試</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-            else:
-                cols = st.columns(4)
-                for idx, num in enumerate(sorted_nums):
-                    picked_times = history.get(num, 0)
-                    is_top = st.session_state.draw_mode == "weighted" and picked_times == 0
-                    card_cls = "candidate-card weighted-top" if is_top else "candidate-card"
-                    if st.session_state.draw_mode == "weighted":
-                        badge_html = (
-                            '<span class="badge-3x">3x 優先</span>'
-                            if picked_times == 0
-                            else f'<span class="badge-1x">1x (已答{picked_times}次)</span>'
-                        )
-                    else:
-                        badge_html = (
-                            f'<span class="badge-1x">已答{picked_times}次</span>'
-                            if picked_times > 0
-                            else '<span class="badge-1x" style="background:#d1fae5;color:#065f46;">尚未發言</span>'
-                        )
+                        with cols[idx % 4]:
+                            st.markdown(
+                                f'<div class="{card_cls}"><div class="candidate-num">{num}</div>{badge_html}</div>',
+                                unsafe_allow_html=True,
+                            )
 
-                    with cols[idx % 4]:
-                        st.markdown(
-                            f'<div class="{card_cls}"><div class="candidate-num">{num}</div>{badge_html}</div>',
-                            unsafe_allow_html=True,
-                        )
+            live_candidate_board()
 
-        live_candidate_board()
+    # ---------------- 中欄：中籤聚光燈舞台 + 抽籤規則與啟動 ----------------
+    with col_draw:
+        spotlight_placeholder = st.empty()
+        spotlight_placeholder.markdown(
+            render_spotlight_html(state["last_winners"], rolling=False),
+            unsafe_allow_html=True,
+        )
 
-    # ---------------- 右側欄位 ----------------
-    with right_col:
-        # 1. 抽籤規則與啟動卡片
         with st.container(border=True):
-            st.markdown("#### 🎲 抽籤規則與啟動")
             mode_choice = st.radio(
                 "抽籤演算法模式",
                 options=["weighted", "equal"],
                 format_func=lambda x: (
-                    "未曾抽中者優先加權（3x 優先，推薦）" if x == "weighted" else "純粹均等亂數（所有人 1x）"
+                    "⚖️ 未曾抽中者優先加權（3x 優先）" if x == "weighted" else "🎲 純粹均等亂數（所有人 1x）"
                 ),
                 index=0 if st.session_state.draw_mode == "weighted" else 1,
+                label_visibility="collapsed",
             )
             if mode_choice != st.session_state.draw_mode:
                 st.session_state.draw_mode = mode_choice
                 st.rerun()
 
-            st.session_state.draw_count = st.number_input(
-                "本題抽取人數（位）",
-                min_value=1,
-                max_value=10,
-                value=st.session_state.draw_count,
-                step=1,
-            )
-
-            st.session_state.sound_enabled = st.toggle(
-                "🔊 啟用抽籤跳號與中獎音效",
-                value=st.session_state.sound_enabled,
-            )
+            cfg_c1, cfg_c2 = st.columns([1.2, 1])
+            with cfg_c1:
+                st.session_state.draw_count = st.number_input(
+                    "抽取人數（位）",
+                    min_value=1,
+                    max_value=10,
+                    value=st.session_state.draw_count,
+                    step=1,
+                )
+            with cfg_c2:
+                st.write("")
+                st.session_state.sound_enabled = st.toggle(
+                    "🔊 音效",
+                    value=st.session_state.sound_enabled,
+                )
 
             if st.button("🎰 開始公平抽籤", type="primary", use_container_width=True):
                 current_candidates = dict(state["candidates"])
                 if not current_candidates:
-                    st.warning("目前候選名單為空，請先等待學生舉手或點擊模擬加入！")
+                    st.warning("目前候選名單為空！")
                 else:
                     winners = pick_weighted_candidates(
                         current_candidates,
@@ -539,7 +545,6 @@ if st.session_state.view_mode == "admin":
                     )
                     pool_nums = list(current_candidates.keys())
 
-                    # 啟動約 1.3 秒跳號滾動音效與視覺動畫
                     play_sound_effect("rolling", enabled=st.session_state.sound_enabled)
 
                     for _ in range(15):
@@ -550,7 +555,6 @@ if st.session_state.view_mode == "admin":
                         )
                         time.sleep(0.085)
 
-                    # 寫入最終中籤結果：從候選名單移除並累加發言次數
                     with state["lock"]:
                         for w in winners:
                             state["candidates"].pop(w, None)
@@ -561,10 +565,10 @@ if st.session_state.view_mode == "admin":
                     st.balloons()
                     st.rerun()
 
-        # 2. 學生掃碼 QR Code 卡片
+    # ---------------- 右欄：QR Code + 本堂課已發言紀錄 ----------------
+    with col_qr:
         with st.container(border=True):
-            st.markdown("#### 📱 學生手機掃碼加入")
-            st.caption("掃描下方 QR Code 免登入直接輸入座號（請貼上你的 Streamlit 公開網址以更新二維碼）")
+            st.markdown("**📱 學生手機掃碼加入**")
             share_url = st.text_input(
                 "學生端網址",
                 value=st.session_state.student_url_input,
@@ -574,28 +578,26 @@ if st.session_state.view_mode == "admin":
             if share_url.strip():
                 qr_b64 = generate_qr_base64(share_url.strip())
                 st.markdown(
-                    f'<div style="text-align:center; padding:8px 0;"><img src="data:image/png;base64,{qr_b64}" width="165" style="border-radius:12px; border:1px solid #e2e8f0; padding:6px; background:#fff;"/></div>',
+                    f'<div style="text-align:center; padding:2px 0;"><img src="data:image/png;base64,{qr_b64}" width="132" style="border-radius:10px; border:1px solid #e2e8f0; padding:4px; background:#fff;"/></div>',
                     unsafe_allow_html=True,
                 )
 
-        # 3. 本堂課已發言紀錄（加權依據）
         with st.container(border=True):
-            h_col1, h_col2 = st.columns([3, 1.5])
+            h_col1, h_col2 = st.columns([2, 1])
             with h_col1:
-                st.markdown("#### 📊 本堂課已發言紀錄")
+                st.markdown("**📊 已發言紀錄**")
             with h_col2:
-                if st.button("重置紀錄", use_container_width=True):
+                if st.button("重置", use_container_width=True):
                     with state["lock"]:
                         state["picked_history"] = {}
-                    st.toast("已重置本堂課發言紀錄，所有人恢復 3x 初始加權")
+                    st.toast("已重置發言紀錄")
                     st.rerun()
 
-            st.caption("系統會自動記錄已抽中過的座號，作為「未曾抽中者 3x 加權」的計算依據。")
             if not state["picked_history"]:
                 st.caption("_尚未抽出任何同學_")
             else:
                 sorted_hist = sorted(state["picked_history"].items(), key=lambda x: -x[1])
-                badges = " ".join(f"`{num} ({cnt}次)`" for num, cnt in sorted_hist)
+                badges = " ".join(f"`{num}({cnt}次)`" for num, cnt in sorted_hist)
                 st.markdown(badges)
 
 
