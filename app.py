@@ -381,8 +381,8 @@ if st.session_state.view_mode == "admin":
         _, lock_col, _ = st.columns([1, 1.4, 1])
         with lock_col:
             st.markdown("### 🔒 老師主控台解鎖")
-            st.info("請輸入 4 碼教師 PIN 碼以操作抽籤控制台（預設 PIN 碼：**`1234`**）")
-            pin_val = st.text_input("教師 PIN 碼", type="password", max_chars=4, placeholder="請輸入 1234")
+            st.caption("預設 PIN 碼為 `1234`（解鎖後本機連線期間將自動記住）")
+            pin_val = st.text_input("請輸入 4 碼 PIN 碼", type="password", max_chars=4)
             if st.button("確認解鎖", type="primary", use_container_width=True):
                 if pin_val.strip() == DEFAULT_PIN:
                     st.session_state.admin_unlocked = True
@@ -391,8 +391,8 @@ if st.session_state.view_mode == "admin":
                     st.error("PIN 碼錯誤，請重新輸入！")
         st.stop()
 
-    # --- 頂部課程標題與開題控制列（精簡單排無重複大標題） ---
-    top_c1, top_c2, top_c3, top_c4 = st.columns([4.2, 1.4, 2.2, 2.2])
+    # --- 頂部課程標題與開題控制列（加寬題次與重置題次按鈕，確保清晰可見） ---
+    top_c1, top_c2, top_c2_reset, top_c3, top_c4 = st.columns([3.3, 1.4, 1.3, 2.0, 2.0])
     with top_c1:
         new_title = st.text_input(
             "課程名稱",
@@ -405,9 +405,19 @@ if st.session_state.view_mode == "admin":
 
     with top_c2:
         st.markdown(
-            f'<div style="background:#eef2ff; border:1px solid #c7d2fe; border-radius:10px; padding:6px 10px; text-align:center; font-weight:900; color:#1e1b4b; font-size:1.1rem;">第 {state["round_id"]} 題</div>',
+            f'<div style="background:#eef2ff; border:1px solid #c7d2fe; border-radius:10px; padding:6px 8px; text-align:center; font-weight:900; color:#1e1b4b; font-size:1.05rem;">第 {state["round_id"]} 題</div>',
             unsafe_allow_html=True,
         )
+
+    with top_c2_reset:
+        if st.button("🔄 題次歸 1", use_container_width=True, help="將題次重置回到第 1 題，並清空當前名單"):
+            with state["lock"]:
+                state["round_id"] = 1
+                state["is_open"] = True
+                state["candidates"] = {}
+                state["last_winners"] = []
+            st.toast("↩️ 已將題次重置為第 1 題！")
+            st.rerun()
 
     with top_c3:
         if state["is_open"]:
