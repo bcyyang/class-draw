@@ -33,14 +33,14 @@ html, body, [class*="css"] {
     max-width: 1440px;
 }
 
-/* 候選人卡片樣式 */
+/* 候選人卡片樣式（緊湊版，騰出空間給上方中獎舞台） */
 .candidate-card {
     background: #f8fafc;
-    border: 2px solid #e2e8f0;
-    border-radius: 14px;
-    padding: 8px 6px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 5px 4px;
     text-align: center;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     transition: transform 0.15s ease;
 }
 .candidate-card.weighted-top {
@@ -48,48 +48,48 @@ html, body, [class*="css"] {
     background: #fffbeb;
 }
 .candidate-num {
-    font-size: 1.5rem;
+    font-size: 1.18rem;
     font-weight: 900;
     color: #0f172a;
-    line-height: 1.2;
+    line-height: 1.15;
 }
 .badge-3x {
     display: inline-block;
     background: #fbbf24;
     color: #0f172a;
-    font-size: 0.7rem;
+    font-size: 0.64rem;
     font-weight: 900;
-    padding: 2px 8px;
+    padding: 1px 6px;
     border-radius: 999px;
-    margin-top: 3px;
+    margin-top: 2px;
 }
 .badge-1x {
     display: inline-block;
     background: #e2e8f0;
     color: #475569;
-    font-size: 0.7rem;
+    font-size: 0.64rem;
     font-weight: 700;
-    padding: 2px 8px;
+    padding: 1px 6px;
     border-radius: 999px;
-    margin-top: 3px;
+    margin-top: 2px;
 }
 
-/* 聚光燈舞台 */
+/* 聚光燈舞台（加大型主舞台，遠距離投影更清晰） */
 .spotlight-box {
     background: linear-gradient(135deg, #1e1b4b 0%, #312e81 55%, #0f172a 100%);
-    border-radius: 20px;
-    padding: 18px 20px;
+    border-radius: 24px;
+    padding: 24px 26px;
     color: #ffffff;
     text-align: center;
-    box-shadow: 0 10px 25px rgba(30, 27, 75, 0.22);
+    box-shadow: 0 12px 30px rgba(30, 27, 75, 0.25);
     margin-bottom: 14px;
 }
 .spotlight-inner {
     background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 16px;
-    padding: 16px 14px;
-    min-height: 128px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    padding: 28px 20px;
+    min-height: 215px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -100,27 +100,27 @@ html, body, [class*="css"] {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-width: 96px;
-    padding: 10px 18px;
-    margin: 5px;
-    border-radius: 18px;
+    min-width: 146px;
+    padding: 16px 28px;
+    margin: 8px;
+    border-radius: 24px;
     background: linear-gradient(180deg, #fde047 0%, #facc15 100%);
     color: #0f172a;
-    border: 2px solid #ffffff;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+    border: 3px solid #ffffff;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
 }
 .rolling-pill {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 82px;
-    height: 82px;
-    margin: 5px;
-    border-radius: 18px;
+    width: 124px;
+    height: 124px;
+    margin: 8px;
+    border-radius: 24px;
     background: rgba(255, 255, 255, 0.18);
-    border: 2px solid rgba(253, 224, 71, 0.7);
+    border: 3px solid rgba(253, 224, 71, 0.8);
     color: #ffffff;
-    font-size: 1.95rem;
+    font-size: 3.1rem;
     font-weight: 900;
 }
 
@@ -303,33 +303,33 @@ def render_spotlight_html(winners, rolling=False, total_pool=0):
     if rolling:
         pills = "".join(f'<div class="rolling-pill">{num}</div>' for num in winners)
         inner = (
-            f'<div style="color:#fde047; font-size:0.82rem; font-weight:800; letter-spacing:0.06em; margin-bottom:8px;">'
+            f'<div style="color:#fde047; font-size:0.95rem; font-weight:800; letter-spacing:0.06em; margin-bottom:12px;">'
             f'🎰 正在從 {total_pool} 位舉手同學中抽出 {len(winners)} 位...</div>'
             f'<div>{pills}</div>'
         )
     elif winners:
         pills = "".join(
             f'<div class="winner-pill">'
-            f'<span style="font-size:0.68rem; font-weight:800; color:#78350f;">中籤座號</span>'
-            f'<span style="font-size:2.2rem; font-weight:900; line-height:1.1;">{num}</span>'
+            f'<span style="font-size:0.85rem; font-weight:900; color:#78350f; letter-spacing:0.05em;">中籤座號</span>'
+            f'<span style="font-size:3.6rem; font-weight:900; line-height:1.05; margin-top:2px;">{num}</span>'
             f'</div>'
             for num in winners
         )
         inner = (
-            f'<div style="color:#fde047; font-size:0.82rem; font-weight:800; letter-spacing:0.06em; margin-bottom:6px;">'
+            f'<div style="color:#fde047; font-size:0.98rem; font-weight:800; letter-spacing:0.06em; margin-bottom:10px;">'
             f'🎉 恭喜以下同學獲得發言機會！</div>'
             f'<div>{pills}</div>'
         )
     else:
         inner = (
-            '<div style="color:#c7d2fe; font-size:1rem; font-weight:600;">'
+            '<div style="color:#e0e7ff; font-size:1.18rem; font-weight:700;">'
             '等待同學舉手加入名單後，點擊右側「開始公平抽籤」</div>'
-            '<div style="color:#a5b4fc; font-size:0.78rem; margin-top:4px;">'
+            '<div style="color:#a5b4fc; font-size:0.86rem; margin-top:6px;">'
             '抽中後將自動從本題候選名單移除，並更新加權紀錄</div>'
         )
     return (
         '<div class="spotlight-box">'
-        '<div style="text-align:left; font-size:1rem; font-weight:800; margin-bottom:10px;">🎯 本題中籤發言同學</div>'
+        '<div style="text-align:left; font-size:1.2rem; font-weight:900; margin-bottom:12px;">🎯 本題中籤發言同學</div>'
         f'<div class="spotlight-inner">{inner}</div>'
         '</div>'
     )
@@ -476,14 +476,14 @@ if st.session_state.view_mode == "admin":
 
                 if not sorted_nums:
                     st.markdown(
-                        '<div style="border:2px dashed #cbd5e1; border-radius:16px; padding:32px; text-align:center; background:#f8fafc; color:#64748b; margin-top:6px;">'
-                        '<div style="font-weight:700; font-size:0.95rem;">目前還沒有同學舉手加入本題名單</div>'
-                        '<div style="font-size:0.8rem; margin-top:4px;">請學生掃描右側 QR Code 輸入座號，或點擊「模擬 8 位學生加入」測試</div>'
+                        '<div style="border:2px dashed #cbd5e1; border-radius:14px; padding:20px; text-align:center; background:#f8fafc; color:#64748b; margin-top:4px;">'
+                        '<div style="font-weight:700; font-size:0.9rem;">目前還沒有同學舉手加入本題名單</div>'
+                        '<div style="font-size:0.78rem; margin-top:3px;">請學生掃描右側 QR Code 輸入座號，或點擊「模擬 8 位學生加入」測試</div>'
                         '</div>',
                         unsafe_allow_html=True,
                     )
                 else:
-                    cols = st.columns(5)
+                    cols = st.columns(6)
                     for idx, num in enumerate(sorted_nums):
                         picked_times = history.get(num, 0)
                         is_top = st.session_state.draw_mode == "weighted" and picked_times == 0
@@ -501,7 +501,7 @@ if st.session_state.view_mode == "admin":
                                 else '<span class="badge-1x" style="background:#d1fae5;color:#065f46;">尚未發言</span>'
                             )
 
-                        with cols[idx % 5]:
+                        with cols[idx % 6]:
                             st.markdown(
                                 f'<div class="{card_cls}"><div class="candidate-num">{num}</div>{badge_html}</div>',
                                 unsafe_allow_html=True,
