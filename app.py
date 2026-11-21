@@ -328,6 +328,7 @@ def load_persisted_state() -> dict:
 def save_persisted_state(state_dict: dict):
     """將最新課堂紀錄安全寫入磁碟（排除不可序列化的 threading.Lock）"""
     serializable = {k: state_dict[k] for k in DEFAULT_CLASSROOM_DATA if k in state_dict}
+    serializable["_updated_at"] = time.time()
     tmp_file = f"{STATE_FILE}.tmp"
     try:
         with open(tmp_file, "w", encoding="utf-8") as f:
@@ -337,14 +338,35 @@ def save_persisted_state(state_dict: dict):
         pass
 
 
+def sync_state_from_disk_if_newer(state_dict: dict):
+    """若磁碟存檔有來自其他裝置或背景程序的新更新，立即同步至目前記憶體"""
+    if not os.path.exists(STATE_FILE):
+        return
+    try:
+        mtime = os.path.getmtime(STATE_FILE)
+        if mtime > state_dict.get("_last_disk_mtime", 0):
+            with open(STATE_FILE, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+            if isinstance(saved, dict):
+                with state_dict["lock"]:
+                    for k in DEFAULT_CLASSROOM_DATA:
+                        if k in saved:
+                            state_dict[k] = saved[k]
+                    state_dict["_last_disk_mtime"] = mtime
+    except Exception:
+        pass
+
+
 @st.cache_resource
 def get_shared_classroom_state():
     loaded = load_persisted_state()
     loaded["lock"] = threading.Lock()
+    loaded["_last_disk_mtime"] = os.path.getmtime(STATE_FILE) if os.path.exists(STATE_FILE) else 0
     return loaded
 
 
 state = get_shared_classroom_state()
+sync_state_from_disk_if_newer(state)
 # 確保舊快取記憶體物件升級時具備新欄位
 if "scores" not in state:
     state["scores"] = {}
@@ -1076,71 +1098,77 @@ if st.session_state.view_mode == "admin":
 
         # 2. 渲染 8 列 × 8 欄座次表（第 8 排在最上方，第 1 排 01~08 在最下方靠近講台）
         if st.session_state.seating_click_mode == "add":
-            st.info("👆 **加分模式啟用中**：直接點擊下方任一位同學的座位按鈕，該生總分即 **+1 分**（與搶答得分自動合併）。")
+            st.info("👆 **加分模式啟用中**：直接點擊下方任一位同學的座位按鈕，該生總分即 **+1 分**（電腦與手機每 2 秒自動雙向同步）。")
         else:
             st.warning("👇 **扣分修正模式啟用中**：點擊任一位同學的座位按鈕，該生總分即 **-1 分**（最低 0 分）；修正完畢請切回加分模式。")
 
-        is_add_mode = st.session_state.seating_click_mode == "add"
-        action_delta = 1 if is_add_mode else -1
+        @st.fragment(run_every=2)
+        def live_seating_grid():
+            sync_state_from_disk_if_newer(state)
+            cur_roster = get_active_roster(state)
+            is_add_mode = st.session_state.seating_click_mode == "add"
+            action_delta = 1 if is_add_mode else -1
 
-        # 由最上排（第 8 排：57~64）往下渲染至最下排（第 1 排：01~08）
-        for row_idx in range(7, -1, -1):
-            row_cols = st.columns(8, gap="small")
-            for col_idx in range(8):
-                seat_int = row_idx * 8 + col_idx + 1
-                seat_str = f"{seat_int:02d}"
-                stu_info = roster.get(seat_str)
-                cur_score = int(state["scores"].get(seat_str, 0))
+            # 由最上排（第 8 排：57~64）往下渲染至最下排（第 1 排：01~08）
+            for row_idx in range(7, -1, -1):
+                row_cols = st.columns(8, gap="small")
+                for col_idx in range(8):
+                    seat_int = row_idx * 8 + col_idx + 1
+                    seat_str = f"{seat_int:02d}"
+                    stu_info = cur_roster.get(seat_str)
+                    cur_score = int(state["scores"].get(seat_str, 0))
 
-                with row_cols[col_idx]:
-                    if stu_info:
-                        cls_label = stu_info.get("class_name", "") or "　"
-                        name_label = stu_info.get("name", "") or "未命名"
-                        card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-box"
-                        score_badge_bg = "#d97706" if cur_score > 0 else "#64748b"
-                        st.markdown(
-                            f'<div class="{card_cls}">'
-                            f'<div style="font-size:0.74rem; font-weight:400; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{cls_label}</div>'
-                            f'<div style="font-size:1.3rem; font-weight:500; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
-                            f'<div style="font-size:0.98rem; font-weight:500; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{name_label}</div>'
-                            f'<div style="margin-top:6px;"><span style="background:{score_badge_bg}; color:#ffffff; font-size:0.95rem; font-weight:800; padding:3px 12px; border-radius:999px; display:inline-block;">⭐ {cur_score} 分</span></div>'
-                            f'</div>',
-                            unsafe_allow_html=True,
-                        )
-                        btn_text = f"➕ {seat_str} (+1)" if is_add_mode else f"➖ {seat_str} (-1)"
-                        st.button(
-                            btn_text,
-                            key=f"seat_click_{seat_str}",
-                            use_container_width=True,
-                            type="primary" if (is_add_mode and cur_score > 0) else "secondary",
-                            on_click=adjust_seat_score,
-                            args=(seat_str, action_delta, True),
-                        )
-                    else:
-                        # 尚未匯入名單或該座號為空位（仍顯示座號，並支援直接點擊計分）
-                        card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-empty"
-                        if cur_score > 0:
+                    with row_cols[col_idx]:
+                        if stu_info:
+                            cls_label = stu_info.get("class_name", "") or "　"
+                            name_label = stu_info.get("name", "") or "未命名"
+                            card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-box"
+                            score_badge_bg = "#d97706" if cur_score > 0 else "#64748b"
                             st.markdown(
                                 f'<div class="{card_cls}">'
-                                f'<div style="font-size:0.72rem; font-weight:400; color:#64748b;">空位 / 未建檔</div>'
+                                f'<div style="font-size:0.74rem; font-weight:400; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{cls_label}</div>'
                                 f'<div style="font-size:1.3rem; font-weight:500; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
-                                f'<div style="margin-top:6px;"><span style="background:#d97706; color:#ffffff; font-size:0.95rem; font-weight:800; padding:3px 12px; border-radius:999px; display:inline-block;">⭐ {cur_score} 分</span></div>'
+                                f'<div style="font-size:0.98rem; font-weight:500; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{name_label}</div>'
+                                f'<div style="margin-top:6px;"><span style="background:{score_badge_bg}; color:#ffffff; font-size:0.95rem; font-weight:800; padding:3px 12px; border-radius:999px; display:inline-block;">⭐ {cur_score} 分</span></div>'
                                 f'</div>',
                                 unsafe_allow_html=True,
                             )
-                        else:
-                            st.markdown(
-                                f'<div class="seat-card-empty"><div style="font-size:1.15rem; font-weight:500; color:#94a3b8;">{seat_str}</div><div>空位</div></div>',
-                                unsafe_allow_html=True,
+                            btn_text = f"➕ {seat_str} (+1)" if is_add_mode else f"➖ {seat_str} (-1)"
+                            st.button(
+                                btn_text,
+                                key=f"seat_click_{seat_str}",
+                                use_container_width=True,
+                                type="primary" if (is_add_mode and cur_score > 0) else "secondary",
+                                on_click=adjust_seat_score,
+                                args=(seat_str, action_delta, True),
                             )
-                        btn_text = f"➕ {seat_str}" if is_add_mode else f"➖ {seat_str}"
-                        st.button(
-                            btn_text,
-                            key=f"seat_empty_click_{seat_str}",
-                            use_container_width=True,
-                            on_click=adjust_seat_score,
-                            args=(seat_str, action_delta, True),
-                        )
+                        else:
+                            # 尚未匯入名單或該座號為空位（仍顯示座號，並支援直接點擊計分）
+                            card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-empty"
+                            if cur_score > 0:
+                                st.markdown(
+                                    f'<div class="{card_cls}">'
+                                    f'<div style="font-size:0.72rem; font-weight:400; color:#64748b;">空位 / 未建檔</div>'
+                                    f'<div style="font-size:1.3rem; font-weight:500; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
+                                    f'<div style="margin-top:6px;"><span style="background:#d97706; color:#ffffff; font-size:0.95rem; font-weight:800; padding:3px 12px; border-radius:999px; display:inline-block;">⭐ {cur_score} 分</span></div>'
+                                    f'</div>',
+                                    unsafe_allow_html=True,
+                                )
+                            else:
+                                st.markdown(
+                                    f'<div class="seat-card-empty"><div style="font-size:1.15rem; font-weight:500; color:#94a3b8;">{seat_str}</div><div>空位</div></div>',
+                                    unsafe_allow_html=True,
+                                )
+                            btn_text = f"➕ {seat_str}" if is_add_mode else f"➖ {seat_str}"
+                            st.button(
+                                btn_text,
+                                key=f"seat_empty_click_{seat_str}",
+                                use_container_width=True,
+                                on_click=adjust_seat_score,
+                                args=(seat_str, action_delta, True),
+                            )
+
+        live_seating_grid()
 
         # 最下方正中央講台標示
         st.markdown('<div class="podium-banner">講　　　　台</div>', unsafe_allow_html=True)
@@ -1401,7 +1429,9 @@ if st.session_state.view_mode == "admin":
                     st.rerun()
 
         # 2. 🏆 課堂即時記分板（支援依得分排名 / 依座號排序 + 手動加扣分微調）
+        @st.fragment(run_every=2)
         def live_admin_scoreboard_card():
+            sync_state_from_disk_if_newer(state)
             with st.container(border=True):
                 st.markdown("#### 🏆 課堂即時記分板")
 
