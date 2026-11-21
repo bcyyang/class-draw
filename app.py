@@ -7,16 +7,51 @@ import random
 import base64
 import threading
 from datetime import datetime
+from PIL import Image, ImageDraw
 import streamlit as st
 import streamlit.components.v1 as components
 import qrcode
 
 # ==========================================
+# 0. 產生專屬手機桌面捷徑與分頁小圖示 (App Icon)
+# ==========================================
+@st.cache_data
+def generate_custom_app_icon():
+    """繪製高辨識度「課堂搶答 × 座次計分」圓角 App 圖示（回傳 PIL Image 與 Base64 PNG）"""
+    size = 256
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    # 1. 深靛藍圓角底框 (#1e1b4b) 與金邊 (#facc15)
+    draw.rounded_rectangle([8, 8, size - 8, size - 8], radius=56, fill="#1e1b4b", outline="#facc15", width=8)
+
+    # 2. 中央金色標靶同心圓（象徵搶答與精準點名）
+    cx, cy = size // 2, size // 2 + 6
+    draw.ellipse([cx - 78, cy - 78, cx + 78, cy + 78], fill="#312e81", outline="#fde047", width=8)
+    draw.ellipse([cx - 46, cy - 46, cx + 46, cy + 46], fill="#4f46e5", outline="#ffffff", width=6)
+    draw.ellipse([cx - 18, cy - 18, cx + 18, cy + 18], fill="#facc15")
+
+    # 3. 右上角亮金色加分徽章（象徵 +1 記分）
+    bx, by, br = 194, 62, 34
+    draw.ellipse([bx - br, by - br, bx + br, by + br], fill="#facc15", outline="#ffffff", width=5)
+    # 繪製加號 "+"
+    draw.rectangle([bx - 14, by - 4, bx + 14, by + 4], fill="#0f172a")
+    draw.rectangle([bx - 4, by - 14, bx + 4, by + 14], fill="#0f172a")
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
+    return img, b64_str
+
+
+APP_ICON_IMAGE, APP_ICON_B64 = generate_custom_app_icon()
+
+# ==========================================
 # 1. 頁面設定與全域自訂 CSS 樣式（完整保留原始視覺風格）
 # ==========================================
 st.set_page_config(
-    page_title="課堂即時搶答抽籤系統",
-    page_icon="🎯",
+    page_title="課堂搶答記分",
+    page_icon=APP_ICON_IMAGE,
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -188,44 +223,44 @@ st.markdown(
         min-height: 112px;
         display: flex;
         flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 8px;
-    }
-    .podium-banner {
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-        color: #f8fafc;
-        border-radius: 16px;
-        padding: 14px 20px;
-        text-align: center;
-        font-size: 1.15rem;
-        font-weight: 900;
-        letter-spacing: 0.25em;
-        margin-top: 14px;
-        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
-        border: 2px solid #334155;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# 允許雙指自由縮放與上下捲動到底（連點雙擊縮放已由上方 touch-action: manipulation 防護）
+# 允許雙指自由縮放與上下捲動到底（連點雙擊縮放已由上方 touch-action: manipulation 防護），並注入手機桌面捷徑專屬圖示
 components.html(
-    """
+    f"""
     <script>
-    (function() {
-        try {
+    (function() {{
+        try {{
             const doc = window.parent.document;
             let meta = doc.querySelector('meta[name="viewport"]');
-            if (!meta) {
+            if (!meta) {{
                 meta = doc.createElement('meta');
                 meta.name = 'viewport';
                 doc.head.appendChild(meta);
-            }
+            }}
             meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes');
-        } catch (e) {}
-    })();
+
+            // 注入手機「加入主畫面 / 桌面捷徑」專用圖示 (iOS Safari 與 Android Chrome)
+            const iconDataUrl = "data:image/png;base64,{APP_ICON_B64}";
+            const relTypes = ["apple-touch-icon", "apple-touch-icon-precomposed", "icon", "shortcut icon"];
+            relTypes.forEach((relName) => {{
+                let link = doc.querySelector(`link[rel="${{relName}}"]`);
+                if (!link) {{
+                    link = doc.createElement('link');
+                    link.rel = relName;
+                    doc.head.appendChild(link);
+                }}
+                link.href = iconDataUrl;
+            }});
+
+            // 設定 iOS 加入主畫面時的乾淨 App 標題
+            let appTitleMeta = doc.querySelector('meta[name="apple-mobile-web-app-title"]');
+            if (!appTitleMeta) {{
+                appTitleMeta = doc.createElement('meta');
+                appTitleMeta.name = 'apple-mobile-web-app-title';
+                doc.head.appendChild(appTitleMeta);
+            }}
+            appTitleMeta.content = "課堂搶答記分";
+        }} catch (e) {{}}
+    }})();
     </script>
     """,
     height=0,
