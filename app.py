@@ -794,7 +794,15 @@ with nav_col1:
 with nav_col2:
     if st.button(
         "📱 學生端",
-    with nav_col3:
+        use_container_width=True,
+        type="primary" if st.session_state.view_mode == "student" else "secondary",
+    ):
+        st.session_state.view_mode = "student"
+        st.query_params.pop("mode", None)
+        st.query_params.pop("auth", None)
+        st.query_params.pop("tab", None)
+        st.rerun()
+with nav_col3:
     if st.button(
         "🖥️ 老師端",
         use_container_width=True,
