@@ -541,14 +541,12 @@ def build_scores_csv(scores_dict, history_dict, sort_mode="seat", roster_dict=No
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["班級", "座號", "姓名", "本堂課總分", "發言次數"])
+    writer.writerow(["座號", "班級", "姓名", "本堂課總分", "發言次數"])
 
-    plain_lines = ["班級\t座號\t姓名\t總分\t發言次數"]
+    plain_lines = ["座號\t班級\t姓名\t總分\t發言次數"]
     for cls_name, seat, stu_name, sc, cnt in items:
-        writer.writerow([cls_name, seat, stu_name, sc, cnt])
-        name_part = f"{cls_name} {stu_name}".strip()
-        label_part = f"{seat}號 {name_part}".strip()
-        plain_lines.append(f"{label_part}\t{sc}分\t({cnt}次)")
+        writer.writerow([seat, cls_name, stu_name, sc, cnt])
+        plain_lines.append(f"{seat}\t{cls_name}\t{stu_name}\t{sc}分\t({cnt}次)")
 
     if not items:
         plain_lines.append("（目前尚無任何得分紀錄）")
