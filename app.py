@@ -491,8 +491,110 @@ if st.session_state.view_mode == "admin":
                 state["candidates"] = {}
                 state["last_winners"] = []
                 state["awarded_winners"] = []
+            st.toast("↩️ 已將題次重置回到第 1 題！")
+            st.rerun()
+
+    with top_c3:
+        reg_label = "🟢 報名開放中（點擊截止）" if state["is_open"] else "🔴 已截止報名（點擊重開）"
+        if st.button(reg_label, use_container_width=True):
+            with state["lock"]:
+                state["is_open"] = not state["is_open"]
+            st.rerun()
+
+    with top_c4:
+        if st.button("🔄 開啟新一題 / 清空名單", type="primary", use_container_width=True):
+            with state["lock"]:
+                state["round_id"] += 1
+                state["is_open"] = True
+                state["candidates"] = {}
+                state["last_winners"] = []
+                state["awarded_winners"] = []
+            st.toast(f"✨ 已開啟第 {state['round_id']} 題！")
+            st.rerun()
+
+    # 若剛抽完籤，播放一次勝利和弦音效
+    if st.session_state.play_fanfare_once:
+        play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
+        st.session_state.play_fanfare_once = False
+
+    # --- 主畫面雙欄佈局：左 8 欄 / 右 4 欄 ---
+    left_col, right_col = st.columns([8, 4], gap="large")
+
+    # ---------------- 左側 8 欄：聚光燈 + 給分操作 + 舉手候選名單（每 2 秒局部自動同步） ----------------
+    with left_col:
+
+        @st.fragment(run_every=2)
+        def live_admin_left_board():
+            pts_now = int(state.get("round_points", 1))
+            awarded_now = set(state.get("awarded_winners", []))
+
+            spotlight_placeholder = st.empty()
+            spotlight_placeholder.markdown(
+                render_spotlight_html(
+                    state["last_winners"],
+                    rolling=False,
+                    round_points=pts_now,
+                    awarded_list=awarded_now,
+                ),
+                unsafe_allow_html=True,
+            )
+
             # --- 中籤給分操作條（固定高度佔位，抽籤前後畫面不跳動） ---
             current_winners = list(state.get("last_winners", []))
+            with st.container(border=True):
+                if current_winners:
+                    g_c1, g_c2 = st.columns([2.4, 3.6])
+                    with g_c1:
+                        st.markdown(f"**⭐ 本題給分（答對 +{pts_now} 分）**")
+                        un_awarded = [w for w in current_winners if w not in awarded_now]
+                        if un_awarded:
+                            if st.button(
+                                f"🎉 全部中籤者 +{pts_now} 分",
+                                type="primary",
+                                use_container_width=True,
+                                key="award_all_winners_btn",
+                            ):
+                                with state["lock"]:
+                                    for w in un_awarded:
+                                        state["scores"][w] = state["scores"].get(w, 0) + pts_now
+                                        if w not in state["awarded_winners"]:
+                                            state["awarded_winners"].append(w)
+                                play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
+                                st.toast(f"⭐ 已為 {', '.join(un_awarded)} 號加上 {pts_now} 分！")
+                                st.rerun()
+                        else:
+                            st.success("✅ 本輪中籤同學皆已完成給分")
+
+                    with g_c2:
+                        st.caption("個別給分 / 扣回（可針對單一座號調整本題得分）：")
+                        w_cols = st.columns(min(len(current_winners), 5))
+                        for idx, w_num in enumerate(current_winners):
+                            is_done = w_num in awarded_now
+                            btn_label = f"↩️ {w_num}號 (-{pts_now}分)" if is_done else f"➕ {w_num}號 (+{pts_now}分)"
+                            with w_cols[idx % 5]:
+                                if st.button(
+                                    btn_label,
+                                    key=f"award_toggle_{w_num}_{idx}",
+                                    use_container_width=True,
+                                ):
+                                    with state["lock"]:
+                                        if is_done:
+                                            state["scores"][w_num] = max(0, state["scores"].get(w_num, 0) - pts_now)
+                                            state["awarded_winners"] = [x for x in state["awarded_winners"] if x != w_num]
+                                        else:
+                                            state["scores"][w_num] = state["scores"].get(w_num, 0) + pts_now
+                                            state["awarded_winners"].append(w_num)
+                                    play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
+                                    st.rerun()
+                else:
+                    st.markdown(
+                        f'<div style="min-height:76px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; color:#64748b;">'
+                        f'<div style="font-weight:800; font-size:0.95rem; color:#334155;">⭐ 本題給分操作區（答對 +{pts_now} 分）</div>'
+                        f'<div style="font-size:0.82rem; margin-top:4px;">抽出中籤同學後，將在此顯示「一鍵全體給分」與「個別給分 / 扣回」按鈕</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+
             with st.container(border=True):
                 if current_winners:
                     g_c1, g_c2 = st.columns([2.4, 3.6])
