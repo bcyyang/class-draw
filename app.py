@@ -12,6 +12,151 @@ import streamlit.components.v1 as components
 import qrcode
 
 # ==========================================
+# 1. 頁面設定與全域自訂 CSS 樣式（完整保留原始視覺風格）
+# ==========================================
+st.set_page_config(
+    page_title="課堂即時搶答抽籤系統",
+    page_icon="🎯",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+st.markdown(
+    """
+    <style>
+    /* 縮小頂部預設留白 */
+    .block-container {
+        padding-top: 1.2rem !important;
+        padding-bottom: 2rem !important;
+        max-width: 1400px;
+    }
+    /* 聚光燈舞台外框 */
+    .spotlight-box {
+        background: linear-gradient(135deg, #312e81 0%, #1e1b4b 55%, #0f172a 100%);
+        border-radius: 24px;
+        padding: 22px 26px;
+        color: #ffffff;
+        box-shadow: 0 14px 30px rgba(30, 27, 75, 0.22);
+        margin-bottom: 14px;
+    }
+    /* 聚光燈內部固定高度容器（避免抽籤前後跳動） */
+    .spotlight-inner {
+        min-height: 248px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 18px;
+        padding: 20px 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
+    /* 中籤同學金色卡片 */
+    .winner-pill {
+        background: linear-gradient(180deg, #fde047 0%, #facc15 100%);
+        color: #0f172a;
+        border: 3px solid #ffffff;
+        border-radius: 22px;
+        padding: 14px 24px;
+        min-width: 138px;
+        margin: 6px;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+    }
+    /* 抽籤滾動跳號卡片 */
+    .rolling-pill {
+        background: rgba(255, 255, 255, 0.18);
+        color: #ffffff;
+        border: 2px solid rgba(253, 224, 71, 0.75);
+        border-radius: 20px;
+        width: 112px;
+        height: 112px;
+        margin: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.8rem;
+        font-weight: 900;
+    }
+    /* 候選人座號卡片 */
+    .candidate-card {
+        background: #f8fafc;
+        border: 2px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 12px 8px;
+        text-align: center;
+        margin-bottom: 10px;
+        transition: all 0.2s ease;
+    }
+    .candidate-card.weighted-top {
+        background: #fffbeb;
+        border-color: #fcd34d;
+    }
+    .candidate-num {
+        font-size: 1.9rem;
+        font-weight: 900;
+        color: #0f172a;
+        line-height: 1.15;
+        margin-bottom: 4px;
+    }
+    .badge-3x {
+        display: inline-block;
+        background: #facc15;
+        color: #0f172a;
+        font-size: 0.75rem;
+        font-weight: 900;
+        padding: 2px 9px;
+        border-radius: 999px;
+    }
+    .badge-1x {
+        display: inline-block;
+        background: #e2e8f0;
+        color: #475569;
+        font-size: 0.74rem;
+        font-weight: 700;
+        padding: 2px 9px;
+        border-radius: 999px;
+    }
+    /* 學生手機端頂部橫幅 */
+    .student-header {
+        background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+        color: #ffffff;
+        border-radius: 20px;
+        padding: 22px 16px;
+        text-align: center;
+        margin-bottom: 14px;
+        box-shadow: 0 10px 24px rgba(79, 70, 229, 0.25);
+    }
+    .status-open {
+        display: inline-block;
+        background: #34d399;
+        color: #064e3b;
+        font-size: 0.82rem;
+        font-weight: 900;
+        padding: 4px 14px;
+        border-radius: 999px;
+        margin-top: 10px;
+    }
+    .status-closed {
+        display: inline-block;
+        background: #f43f5e;
+        color: #ffffff;
+        font-size: 0.82rem;
+        font-weight: 900;
+        padding: 4px 14px;
+        border-radius: 999px;
+        margin-top: 10px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ==========================================
 # 2. 全班共用記憶體 + 本機 JSON 持久化狀態
 # ==========================================
 STATE_FILE = "classroom_state.json"
