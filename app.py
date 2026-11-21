@@ -240,10 +240,12 @@ def sync_auto_award_from_widget():
 
 
 def clear_all_scoreboard_records():
-    """透過 on_click 回呼清空全班記分板紀錄並安全重置勾選狀態"""
+    """透過 on_click 回呼徹底清空全班記分板座號與分數紀錄"""
     with state["lock"]:
         state["scores"] = {}
+        state["picked_history"] = {}
         state["awarded_winners"] = []
+        state["last_winners"] = []
     st.session_state["confirm_clear_scores_chk"] = False
     st.session_state["scores_cleared_toast"] = True
 
