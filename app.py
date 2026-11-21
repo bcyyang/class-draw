@@ -308,6 +308,18 @@ def pick_weighted_candidates(candidates_dict, history_dict, count, weighted=True
 def generate_qr_base64(url_text: str) -> str:
     qr = qrcode.QRCode(
         version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=8,
+        border=2,
+    )
+    qr.add_data(url_text)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#0f172a", back_color="#ffffff")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
 def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, awarded_list=None):
     awarded_set = set(awarded_list or [])
     if rolling:
