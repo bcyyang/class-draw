@@ -1004,8 +1004,22 @@ else:
                     else:
                         st.info("👀 請抬頭看教室大螢幕等待老師抽籤！當老師開啟**下一題**時，此畫面會自動解鎖。")
 
-                    if st.button("🔄 立即刷新最新抽籤結果", use_container_width=True):
-                        st.rerun()
+                    btn_c1, btn_c2 = st.columns(2)
+                    with btn_c1:
+                        if st.button("🔄 刷新最新結果", use_container_width=True):
+                            st.rerun()
+                    with btn_c2:
+                        # 只要本題仍開放報名且該生還在候選名單中，就允許在抽籤前取消舉手（或改輸入座號）
+                        can_cancel = is_open and (saved_num in state["candidates"])
+                        if can_cancel:
+                            if st.button("🙅 取消舉手 / 改號", use_container_width=True):
+                                with state["lock"]:
+                                    state["candidates"].pop(saved_num, None)
+                                st.session_state.submitted_round = 0
+                                st.toast(f"已取消 {saved_num} 號的舉手申請")
+                                st.rerun()
+                        else:
+                            st.button("🔒 已鎖定名單", disabled=True, use_container_width=True)
                 elif not is_open:
                     st.warning("⏸️ 本題已截止舉手報名，老師正在進行抽籤或討論中，請等待下一題！")
                     if st.button("🔄 檢查是否已開啟下一題", use_container_width=True):
