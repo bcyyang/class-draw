@@ -453,6 +453,16 @@ def reset_entire_classroom():
     st.session_state["new_class_toast"] = True
 
 
+def open_new_class_confirm():
+    """開啟新課堂二段確認提示框"""
+    st.session_state.confirm_new_class = True
+
+
+def close_new_class_confirm():
+    """取消開啟新課堂二段確認提示框"""
+    st.session_state.confirm_new_class = False
+
+
 # ==========================================
 # 4. 核心演算法、音效、CSV 匯出與座次表輔助函式
 # ==========================================
@@ -834,9 +844,13 @@ if st.session_state.view_mode == "admin":
             st.rerun()
 
     with top_c5:
-        if st.button("🏫 開啟新課堂", use_container_width=True, help="全部重置回到原始狀態（題次歸 1、清空名單、記分板與發言紀錄全部歸零；保留已匯入的三班名單）"):
-            st.session_state.confirm_new_class = True
-            st.rerun()
+        st.button(
+            "🏫 開啟新課堂",
+            key="open_new_class_trigger_btn",
+            use_container_width=True,
+            help="全部重置回到原始狀態（題次歸 1、清空名單、記分板與發言紀錄全部歸零；保留已匯入的三班名單）",
+            on_click=open_new_class_confirm,
+        )
 
     # --- 2.0 雙畫面工作區切換 + 三班名單一鍵切換列 ---
     tab_c1, tab_c2, tab_c3 = st.columns([2.1, 2.2, 5.7])
@@ -889,14 +903,18 @@ if st.session_state.view_mode == "admin":
             with warn_c2:
                 st.button(
                     "✅ 確定全部重置",
+                    key="confirm_reset_entire_class_btn",
                     type="primary",
                     use_container_width=True,
                     on_click=reset_entire_classroom,
                 )
             with warn_c3:
-                if st.button("❌ 取消", use_container_width=True):
-                    st.session_state.confirm_new_class = False
-                    st.rerun()
+                st.button(
+                    "❌ 取消",
+                    key="cancel_reset_entire_class_btn",
+                    use_container_width=True,
+                    on_click=close_new_class_confirm,
+                )
 
     # 若剛抽完籤，播放一次勝利和弦音效
     if st.session_state.play_fanfare_once:
