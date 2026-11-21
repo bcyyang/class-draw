@@ -353,16 +353,13 @@ def build_scores_csv(scores_dict, history_dict, sort_mode="seat"):
     else:
         items.sort(key=lambda x: (int(x[0]) if x[0].isdigit() else 9999, x[0]))
 
-    unique_desc_scores = sorted({sc for _, sc, _ in items if sc > 0}, reverse=True)
-
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["座號", "本堂課總分", "發言次數", "得分名次"])
+    writer.writerow(["座號", "本堂課總分", "發言次數"])
 
     plain_lines = ["座號\t總分\t發言次數"]
     for seat, sc, cnt in items:
-        rank_str = str(unique_desc_scores.index(sc) + 1) if (sc > 0 and sc in unique_desc_scores) else "-"
-        writer.writerow([seat, sc, cnt, rank_str])
+        writer.writerow([seat, sc, cnt])
         plain_lines.append(f"{seat}號\t{sc}分\t({cnt}次)")
 
     # 加上 utf-8-sig (BOM) 讓 Excel 雙擊開啟時中文標題不亂碼
