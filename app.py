@@ -520,15 +520,17 @@ def play_sound_effect(kind="fanfare", enabled=True):
 
 
 def build_scores_csv(scores_dict, history_dict, sort_mode="seat", roster_dict=None):
-    """產生含 UTF-8 BOM 的成績 CSV 資料（自動帶入班級、座號、姓名與合併總分）"""
+    """產生含 UTF-8 BOM 的成績 CSV 資料（僅列出有加分 > 0 的同學，避免 0 分洗版）"""
     roster = roster_dict or {}
     all_seats = set(scores_dict.keys()) | set(history_dict.keys()) | set(roster.keys())
     items = []
     for seat in all_seats:
+        sc = int(scores_dict.get(seat, 0))
+        if sc <= 0:
+            continue
         info = roster.get(seat, {})
         cls_name = info.get("class_name", "")
         stu_name = info.get("name", "")
-        sc = int(scores_dict.get(seat, 0))
         cnt = int(history_dict.get(seat, 0))
         items.append((cls_name, seat, stu_name, sc, cnt))
 
@@ -547,6 +549,9 @@ def build_scores_csv(scores_dict, history_dict, sort_mode="seat", roster_dict=No
         name_part = f"{cls_name} {stu_name}".strip()
         label_part = f"{seat}號 {name_part}".strip()
         plain_lines.append(f"{label_part}\t{sc}分\t({cnt}次)")
+
+    if not items:
+        plain_lines.append("（目前尚無任何得分紀錄）")
 
     # 加上 utf-8-sig (BOM) 讓 Excel 雙擊開啟時中文標題不亂碼
     csv_bytes = output.getvalue().encode("utf-8-sig")
