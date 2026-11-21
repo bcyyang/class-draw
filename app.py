@@ -876,6 +876,24 @@ if st.session_state.view_mode == "admin":
                                 st.toast(f"已調整 {clean_s} 號分數（目前 {new_val} 分）")
                                 st.rerun()
 
+                    st.divider()
+                    confirm_clear_scores = st.checkbox(
+                        "確認要刪除全部記分板紀錄（此動作無法復原）",
+                        key="confirm_clear_scores_chk",
+                    )
+                    if st.button(
+                        "🗑️ 刪除全部記分板紀錄",
+                        disabled=not confirm_clear_scores,
+                        use_container_width=True,
+                        key="clear_all_scores_btn",
+                    ):
+                        with state["lock"]:
+                            state["scores"] = {}
+                            state["awarded_winners"] = []
+                        st.session_state.confirm_clear_scores_chk = False
+                        st.toast("🗑️ 已刪除全部課堂記分板紀錄！")
+                        st.rerun()
+
         live_admin_scoreboard_card()
 
         # 3. 本堂課已發言紀錄卡片
