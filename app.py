@@ -233,6 +233,13 @@ def sync_auto_award_from_widget():
     """同步自動給分開關狀態"""
     with state["lock"]:
         state["auto_award"] = bool(st.session_state.auto_award_input)
+
+
+def normalize_seat_num(raw_text: str) -> str:
+    """標準化座號：1~9 的單一位數自動在前面補 0（例如 '5' -> '05'）"""
+    clean = (raw_text or "").strip().upper()
+    if not clean:
+        return ""
     if clean.isdigit() and len(clean) == 1:
         return clean.zfill(2)
     return clean
@@ -732,6 +739,17 @@ if st.session_state.view_mode == "admin":
                             state["scores"] = {}
                             state["awarded_winners"] = []
                         st.toast("🧹 已清空全班記分板分數！")
+                        st.rerun()
+
+                sort_c1, sort_c2 = st.columns(2)
+                with sort_c1:
+                    if st.button(
+                        "🥇 依得分排名",
+                        use_container_width=True,
+                        type="primary" if st.session_state.scoreboard_sort == "score" else "secondary",
+                        key="sort_by_score_btn",
+                    ):
+                        st.session_state.scoreboard_sort = "score"
                         st.rerun()
                 with sort_c2:
                     if st.button(
