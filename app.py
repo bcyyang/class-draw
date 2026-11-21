@@ -1,5 +1,7 @@
 import io
+import os
 import csv
+import json
 import time
 import random
 import base64
@@ -10,174 +12,58 @@ import streamlit.components.v1 as components
 import qrcode
 
 # ==========================================
-# 1. 頁面基本設定與全域視覺樣式 (CSS)
+# 2. 全班共用記憶體 + 本機 JSON 持久化狀態
 # ==========================================
-st.set_page_config(
-    page_title="課堂即時搶答抽籤系統",
-    page_icon="🎯",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
+STATE_FILE = "classroom_state.json"
 
-CUSTOM_CSS = """
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
-
-html, body, [class*="css"] {
-    font-family: 'Inter', 'Noto Sans TC', sans-serif;
-}
-
-.block-container {
-    padding-top: 2.6rem;
-    padding-bottom: 1.5rem;
-    padding-left: 1.8rem;
-    padding-right: 1.8rem;
-    max-width: 1440px;
+DEFAULT_CLASSROOM_DATA = {
+    "course_title": "課堂即時搶答抽籤",
+    "round_id": 1,
+    "is_open": True,
+    "candidates": {},      # { "05": timestamp }
+    "picked_history": {},  # { "05": count }
+    "last_winners": [],    # ["05", "18"]
+    "scores": {},          # { "05": 4, "18": 2 } 累計總分
+    "round_points": 1,     # 本題預設配分
+    "awarded_winners": [], # 本輪已給過分的座號，防止重複誤按
+    "auto_award": True,    # 抽中時是否直接自動給分
 }
 
-/* 候選人卡片樣式（加大清晰版，向下自然延伸） */
-.candidate-card {
-    background: #f8fafc;
-    border: 2px solid #e2e8f0;
-    border-radius: 14px;
-    padding: 12px 8px;
-    text-align: center;
-    margin-bottom: 10px;
-    transition: transform 0.15s ease;
-}
-.candidate-card.weighted-top {
-    border-color: #fbbf24;
-    background: #fffbeb;
-}
-.candidate-num {
-    font-size: 1.75rem;
-    font-weight: 900;
-    color: #0f172a;
-    line-height: 1.2;
-}
-.badge-3x {
-    display: inline-block;
-    background: #fbbf24;
-    color: #0f172a;
-    font-size: 0.75rem;
-    font-weight: 900;
-    padding: 2px 10px;
-    border-radius: 999px;
-    margin-top: 5px;
-}
-.badge-1x {
-    display: inline-block;
-    background: #e2e8f0;
-    color: #475569;
-    font-size: 0.75rem;
-    font-weight: 700;
-    padding: 2px 10px;
-    border-radius: 999px;
-    margin-top: 5px;
-}
 
-/* 聚光燈舞台（加大型主舞台，遠距離投影更清晰） */
-.spotlight-box {
-    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 55%, #0f172a 100%);
-    border-radius: 24px;
-    padding: 24px 26px;
-    color: #ffffff;
-    text-align: center;
-    box-shadow: 0 12px 30px rgba(30, 27, 75, 0.25);
-    margin-bottom: 14px;
-}
-.spotlight-inner {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 20px;
-    padding: 24px 20px;
-    min-height: 248px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-.winner-pill {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-width: 146px;
-    padding: 16px 28px;
-    margin: 8px;
-    border-radius: 24px;
-    background: linear-gradient(180deg, #fde047 0%, #facc15 100%);
-    color: #0f172a;
-    border: 3px solid #ffffff;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
-}
-.rolling-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 124px;
-    height: 124px;
-    margin: 8px;
-    border-radius: 24px;
-    background: rgba(255, 255, 255, 0.18);
-    border: 3px solid rgba(253, 224, 71, 0.8);
-    color: #ffffff;
-    font-size: 3.1rem;
-    font-weight: 900;
-}
+def load_persisted_state() -> dict:
+    """啟動時從磁碟讀取前一次保留的課堂紀錄（若無檔案則回傳預設值）"""
+    data = {k: (v.copy() if isinstance(v, (dict, list)) else v) for k, v in DEFAULT_CLASSROOM_DATA.items()}
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+            if isinstance(saved, dict):
+                for k in DEFAULT_CLASSROOM_DATA:
+                    if k in saved:
+                        data[k] = saved[k]
+        except Exception:
+            pass
+    return data
 
-/* 學生端卡片 */
-.student-header {
-    background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
-    color: #ffffff;
-    padding: 26px 20px;
-    border-radius: 24px;
-    text-align: center;
-    margin-bottom: 18px;
-    box-shadow: 0 10px 24px rgba(79, 70, 229, 0.22);
-}
-.status-open {
-    display: inline-block;
-    background: #34d399;
-    color: #064e3b;
-    font-weight: 800;
-    font-size: 0.8rem;
-    padding: 4px 14px;
-    border-radius: 999px;
-    margin-top: 8px;
-}
-.status-closed {
-    display: inline-block;
-    background: #fb7185;
-    color: #ffffff;
-    font-weight: 800;
-    font-size: 0.8rem;
-    padding: 4px 14px;
-    border-radius: 999px;
-    margin-top: 8px;
-}
-</style>
-"""
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-# ==========================================
-# 2. 全班共用記憶體狀態 (@st.cache_resource)
-# ==========================================
+def save_persisted_state(state_dict: dict):
+    """將最新課堂紀錄安全寫入磁碟（排除不可序列化的 threading.Lock）"""
+    serializable = {k: state_dict[k] for k in DEFAULT_CLASSROOM_DATA if k in state_dict}
+    tmp_file = f"{STATE_FILE}.tmp"
+    try:
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(serializable, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_file, STATE_FILE)
+    except Exception:
+        pass
+
+
 @st.cache_resource
 def get_shared_classroom_state():
-    return {
-        "lock": threading.Lock(),
-        "course_title": "課堂即時搶答抽籤",
-        "round_id": 1,
-        "is_open": True,
-        "candidates": {},      # { "05": timestamp }
-        "picked_history": {},  # { "05": count }
-        "last_winners": [],    # ["05", "18"]
-        "scores": {},          # { "05": 4, "18": 2 } 累計總分
-        "round_points": 1,     # 本題預設配分
-        "awarded_winners": [], # 本輪已給過分的座號，防止重複誤按
-        "auto_award": True,    # 抽中時是否直接自動給分
-    }
+    loaded = load_persisted_state()
+    loaded["lock"] = threading.Lock()
+    return loaded
+
 
 state = get_shared_classroom_state()
 # 確保舊快取記憶體物件升級時具備新欄位
@@ -233,12 +119,14 @@ def sync_round_points_from_widget():
     """當老師點擊本題配分的 +/- 號時平滑同步至共用狀態，不需額外強制 rerun"""
     with state["lock"]:
         state["round_points"] = int(st.session_state.round_points_input)
+        save_persisted_state(state)
 
 
 def sync_auto_award_from_widget():
     """同步自動給分開關狀態"""
     with state["lock"]:
         state["auto_award"] = bool(st.session_state.auto_award_input)
+        save_persisted_state(state)
 
 
 def clear_all_scoreboard_records():
@@ -248,6 +136,7 @@ def clear_all_scoreboard_records():
         state["picked_history"] = {}
         state["awarded_winners"] = []
         state["last_winners"] = []
+        save_persisted_state(state)
     st.session_state["confirm_clear_scores_chk"] = False
     st.session_state["scores_cleared_toast"] = True
 
@@ -262,6 +151,7 @@ def reset_entire_classroom():
         state["last_winners"] = []
         state["scores"] = {}
         state["awarded_winners"] = []
+        save_persisted_state(state)
     st.session_state.confirm_new_class = False
     st.session_state["new_class_toast"] = True
 
@@ -503,6 +393,7 @@ if st.session_state.view_mode == "admin":
         if new_title.strip() and new_title != state["course_title"]:
             with state["lock"]:
                 state["course_title"] = new_title.strip()
+                save_persisted_state(state)
 
     with top_c2:
         st.markdown(
@@ -518,6 +409,7 @@ if st.session_state.view_mode == "admin":
                 state["candidates"] = {}
                 state["last_winners"] = []
                 state["awarded_winners"] = []
+                save_persisted_state(state)
             st.toast("↩️ 已將題次重置回到第 1 題！")
             st.rerun()
 
@@ -526,6 +418,7 @@ if st.session_state.view_mode == "admin":
         if st.button(reg_label, use_container_width=True):
             with state["lock"]:
                 state["is_open"] = not state["is_open"]
+                save_persisted_state(state)
             st.rerun()
 
     with top_c4:
@@ -536,6 +429,7 @@ if st.session_state.view_mode == "admin":
                 state["candidates"] = {}
                 state["last_winners"] = []
                 state["awarded_winners"] = []
+                save_persisted_state(state)
             st.toast(f"✨ 已開啟第 {state['round_id']} 題！")
             st.rerun()
 
@@ -615,6 +509,7 @@ if st.session_state.view_mode == "admin":
                                         state["scores"][w] = state["scores"].get(w, 0) + pts_now
                                         if w not in state["awarded_winners"]:
                                             state["awarded_winners"].append(w)
+                                    save_persisted_state(state)
                                 play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
                                 st.toast(f"⭐ 已為 {', '.join(un_awarded)} 號加上 {pts_now} 分！")
                                 st.rerun()
@@ -640,6 +535,7 @@ if st.session_state.view_mode == "admin":
                                         else:
                                             state["scores"][w_num] = state["scores"].get(w_num, 0) + pts_now
                                             state["awarded_winners"].append(w_num)
+                                        save_persisted_state(state)
                                     play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
                                     st.rerun()
                 else:
@@ -668,6 +564,7 @@ if st.session_state.view_mode == "admin":
                             now_ts = time.time()
                             for idx, num in enumerate(to_add):
                                 state["candidates"][num] = now_ts + idx * 0.01
+                            save_persisted_state(state)
                         st.rerun()
                 with header_c3:
                     manual_num = st.text_input(
@@ -682,6 +579,7 @@ if st.session_state.view_mode == "admin":
                         if clean:
                             with state["lock"]:
                                 state["candidates"][clean] = time.time()
+                                save_persisted_state(state)
                             st.rerun()
                 with header_c5:
                     if st.button("🔄 同步", use_container_width=True, help="立即從伺服器同步最新名單與中籤畫面"):
@@ -816,6 +714,7 @@ if st.session_state.view_mode == "admin":
                                 state["scores"].setdefault(w, 0)
                         state["last_winners"] = winners
                         state["awarded_winners"] = list(winners) if auto_give else []
+                        save_persisted_state(state)
 
                     st.session_state.play_fanfare_once = True
                     st.rerun()
@@ -929,6 +828,7 @@ if st.session_state.view_mode == "admin":
                                 with state["lock"]:
                                     new_val = max(0, state["scores"].get(clean_s, 0) + int(adj_delta))
                                     state["scores"][clean_s] = new_val
+                                    save_persisted_state(state)
                                 st.toast(f"已調整 {clean_s} 號分數（目前 {new_val} 分）")
                                 st.rerun()
 
@@ -957,6 +857,7 @@ if st.session_state.view_mode == "admin":
                     if st.button("🗑️ 重置紀錄", use_container_width=True, help="清空所有已發言紀錄，所有人恢復 3x 優先權重"):
                         with state["lock"]:
                             state["picked_history"] = {}
+                            save_persisted_state(state)
                         st.toast("已清空本堂課已發言紀錄，所有人恢復 3x 優先加權！")
                         st.rerun()
 
@@ -1112,6 +1013,7 @@ else:
                             if st.button("🙅 取消舉手 / 改號", use_container_width=True):
                                 with state["lock"]:
                                     state["candidates"].pop(saved_num, None)
+                                    save_persisted_state(state)
                                 st.session_state.submitted_round = 0
                                 st.toast(f"已取消 {saved_num} 號的舉手申請")
                                 st.rerun()
@@ -1138,6 +1040,7 @@ else:
                         else:
                             with state["lock"]:
                                 state["candidates"][clean_num] = time.time()
+                                save_persisted_state(state)
                             st.session_state.student_saved_num = clean_num
                             st.session_state.submitted_round = current_round
                             st.rerun()
