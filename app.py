@@ -151,6 +151,49 @@ st.markdown(
         border-radius: 999px;
         margin-top: 10px;
     }
+    /* 2.0 座次表專屬樣式（觸控友善、清楚顯示班級/座號/姓名/總分） */
+    .seat-card-box {
+        border-radius: 14px;
+        padding: 8px 6px 6px 6px;
+        text-align: center;
+        border: 2px solid #cbd5e1;
+        background: #ffffff;
+        margin-bottom: 4px;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+    }
+    .seat-card-box.has-score {
+        background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+        border-color: #f59e0b;
+    }
+    .seat-card-empty {
+        border-radius: 14px;
+        padding: 18px 6px;
+        text-align: center;
+        border: 1.5px dashed #cbd5e1;
+        background: #f8fafc;
+        color: #94a3b8;
+        font-size: 0.8rem;
+        font-weight: 700;
+        min-height: 112px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 8px;
+    }
+    .podium-banner {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        color: #f8fafc;
+        border-radius: 16px;
+        padding: 14px 20px;
+        text-align: center;
+        font-size: 1.15rem;
+        font-weight: 900;
+        letter-spacing: 0.25em;
+        margin-top: 14px;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
+        border: 2px solid #334155;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -168,10 +211,11 @@ DEFAULT_CLASSROOM_DATA = {
     "candidates": {},      # { "05": timestamp }
     "picked_history": {},  # { "05": count }
     "last_winners": [],    # ["05", "18"]
-    "scores": {},          # { "05": 4, "18": 2 } 累計總分
+    "scores": {},          # { "05": 4, "18": 2 } 累計合併總分（搶答 + 座次表）
     "round_points": 1,     # 本題預設配分
     "awarded_winners": [], # 本輪已給過分的座號，防止重複誤按
     "auto_award": True,    # 抽中時是否直接自動給分
+    "roster": {},          # 2.0 新增：{ "01": {"class_name": "華文一甲", "seat": "01", "name": "莊子萱"}, ... }
 }
 
 
@@ -220,6 +264,8 @@ if "awarded_winners" not in state:
     state["awarded_winners"] = []
 if "auto_award" not in state:
     state["auto_award"] = True
+if "roster" not in state:
+    state["roster"] = {}
 
 DEFAULT_PIN = "1234"
 
@@ -234,6 +280,12 @@ elif query_mode == "admin":
 
 if "admin_unlocked" not in st.session_state:
     st.session_state.admin_unlocked = False
+if "admin_tab" not in st.session_state:
+    st.session_state.admin_tab = "draw"  # "draw" (搶答抽籤) | "seating" (全班座次表)
+if "seating_click_mode" not in st.session_state:
+    st.session_state.seating_click_mode = "add"  # "add" (+1分) | "sub" (-1分)
+if "seating_undo_stack" not in st.session_state:
+    st.session_state.seating_undo_stack = []  # [(seat, delta), ...]
 if "draw_mode" not in st.session_state:
     st.session_state.draw_mode = "weighted"
 if "draw_count" not in st.session_state:
@@ -295,144 +347,137 @@ def reset_entire_classroom():
         state["picked_history"] = {}
         state["last_winners"] = []
         state["scores"] = {}
-        state["awarded_winners"] = []
-        save_persisted_state(state)
-    st.session_state.confirm_new_class = False
-    st.session_state["new_class_toast"] = True
+def build_scores_csv(scores_dict, history_dict, sort_mode="seat", roster_dict=None):
+    """產生含 UTF-8 BOM 的成績 CSV 資料（自動帶入班級、座號、姓名與合併總分）"""
+    roster = roster_dict or {}
+    all_seats = set(scores_dict.keys()) | set(history_dict.keys()) | set(roster.keys())
+    items = []
+    for seat in all_seats:
+        info = roster.get(seat, {})
+        cls_name = info.get("class_name", "")
+        stu_name = info.get("name", "")
+        sc = int(scores_dict.get(seat, 0))
+        cnt = int(history_dict.get(seat, 0))
+        items.append((cls_name, seat, stu_name, sc, cnt))
 
-
-def normalize_seat_num(raw_text: str) -> str:
-    """標準化座號：1~9 的單一位數自動在前面補 0（例如 '5' -> '05'）"""
-    clean = (raw_text or "").strip().upper()
-    if not clean:
-        return ""
-    if clean.isdigit() and len(clean) == 1:
-        return clean.zfill(2)
-    return clean
-
-
-def play_sound_effect(kind: str, enabled: bool = True):
-    """透過 Web Audio API 在瀏覽器合成跳號滴答聲與中獎勝利和弦"""
-    if not enabled:
-        return
-    uid = f"{kind}_{time.time()}"
-    if kind == "rolling":
-        js_code = f"""
-        <script>
-        // {uid}
-        (function() {{
-            try {{
-                const AudioCtx = window.parent.AudioContext || window.parent.webkitAudioContext || window.AudioContext || window.webkitAudioContext;
-                const ctx = new AudioCtx();
-                if (ctx.state === 'suspended') ctx.resume();
-                for (let i = 0; i < 15; i++) {{
-                    const t = ctx.currentTime + i * 0.085;
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(480 + (i % 5) * 65, t);
-                    gain.gain.setValueAtTime(0.14, t);
-                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-                    osc.start(t);
-                    osc.stop(t + 0.065);
-                }}
-            }} catch (e) {{}}
-        }})();
-        </script>
-        """
-    else:
-        js_code = f"""
-        <script>
-        // {uid}
-        (function() {{
-            try {{
-                const AudioCtx = window.parent.AudioContext || window.parent.webkitAudioContext || window.AudioContext || window.webkitAudioContext;
-                const ctx = new AudioCtx();
-                if (ctx.state === 'suspended') ctx.resume();
-                const notes = [523.25, 659.25, 783.99, 1046.50];
-                notes.forEach((freq, idx) => {{
-                    const t = ctx.currentTime + idx * 0.095;
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(freq, t);
-                    gain.gain.setValueAtTime(0.22, t);
-                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-                    osc.start(t);
-                    osc.stop(t + 0.34);
-                }});
-            }} catch (e) {{}}
-        }})();
-        </script>
-        """
-    components.html(js_code, height=0, width=0)
-
-
-def pick_weighted_candidates(candidates_dict, history_dict, count, weighted=True):
-    pool = list(candidates_dict.keys())
-    selected = []
-    pick_total = min(count, len(pool))
-
-    for _ in range(pick_total):
-        if weighted:
-            weights = [3 if history_dict.get(num, 0) == 0 else 1 for num in pool]
-        else:
-            weights = [1 for _ in pool]
-
-        chosen = random.choices(pool, weights=weights, k=1)[0]
-        selected.append(chosen)
-        pool.remove(chosen)
-
-    return selected
-
-
-def generate_qr_base64(url_text: str) -> str:
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_M,
-        box_size=8,
-        border=2,
-    )
-    qr.add_data(url_text)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="#0f172a", back_color="#ffffff")
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return base64.b64encode(buf.getvalue()).decode("utf-8")
-
-
-def build_scores_csv(scores_dict, history_dict, sort_mode="seat"):
-    """產生含 UTF-8 BOM 的成績 CSV 資料（Excel 直接開啟不亂碼）與純文字預覽"""
-    all_seats = set(scores_dict.keys()) | set(history_dict.keys())
-    items = [
-        (seat, int(scores_dict.get(seat, 0)), int(history_dict.get(seat, 0)))
-        for seat in all_seats
-    ]
     if sort_mode == "score":
-        items.sort(key=lambda x: (-x[1], int(x[0]) if x[0].isdigit() else 9999, x[0]))
+        items.sort(key=lambda x: (-x[3], int(x[1]) if x[1].isdigit() else 9999, x[1]))
     else:
-        items.sort(key=lambda x: (int(x[0]) if x[0].isdigit() else 9999, x[0]))
+        items.sort(key=lambda x: (int(x[1]) if x[1].isdigit() else 9999, x[1]))
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["座號", "本堂課總分", "發言次數"])
+    writer.writerow(["班級", "座號", "姓名", "本堂課總分", "發言次數"])
 
-    plain_lines = ["座號\t總分\t發言次數"]
-    for seat, sc, cnt in items:
-        writer.writerow([seat, sc, cnt])
-        plain_lines.append(f"{seat}號\t{sc}分\t({cnt}次)")
+    plain_lines = ["班級\t座號\t姓名\t總分\t發言次數"]
+    for cls_name, seat, stu_name, sc, cnt in items:
+        writer.writerow([cls_name, seat, stu_name, sc, cnt])
+        name_part = f"{cls_name} {stu_name}".strip()
+        label_part = f"{seat}號 {name_part}".strip()
+        plain_lines.append(f"{label_part}\t{sc}分\t({cnt}次)")
 
     # 加上 utf-8-sig (BOM) 讓 Excel 雙擊開啟時中文標題不亂碼
     csv_bytes = output.getvalue().encode("utf-8-sig")
     return csv_bytes, "\n".join(plain_lines)
 
 
+def parse_roster_csv_bytes(raw_bytes: bytes) -> dict:
+    """解析班級名單 CSV（欄位需包含：班級、座號、姓名；自動相容 UTF-8 与 Big5/CP950）"""
+    text = None
+    for enc in ("utf-8-sig", "utf-8", "cp950", "big5"):
+        try:
+            text = raw_bytes.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    if text is None:
+        raise ValueError("無法辨識 CSV 檔案編碼，請存為 UTF-8 或 Excel CSV 格式。")
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise ValueError("CSV 檔案內容為空。")
+
+    # 去除欄位名稱前後空白或 BOM
+    clean_fields = [f.strip().lstrip("\ufeff") for f in reader.fieldnames if f]
+    required = {"班級", "座號", "姓名"}
+    if not required.issubset(set(clean_fields)):
+        raise ValueError(f"CSV 標題列必須包含「班級、座號、姓名」，目前偵測到的欄位為：{', '.join(clean_fields)}")
+
+    parsed_roster = {}
+    for row in reader:
+        clean_row = {(k.strip().lstrip("\ufeff") if k else ""): (v.strip() if v else "") for k, v in row.items()}
+        seat = normalize_seat_num(clean_row.get("座號", ""))
+        if not seat:
+            continue
+        parsed_roster[seat] = {
+            "class_name": clean_row.get("班級", ""),
+            "seat": seat,
+            "name": clean_row.get("姓名", ""),
+        }
+
+    if not parsed_roster:
+        raise ValueError("CSV 檔案中沒有讀取到任何有效的座號資料。")
+    return parsed_roster
+
+
+def generate_sample_roster_csv() -> bytes:
+    """產生班級名單 CSV 範本（含班級、座號、姓名三欄）"""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["班級", "座號", "姓名"])
+    samples = [
+        ("華文一甲", "01", "莊子萱"),
+        ("華文一甲", "02", "游嘉瑄"),
+        ("環安三甲", "03", "周士凱"),
+        ("華文一甲", "04", "林士桓"),
+        ("光電三乙", "05", "洪嘉均"),
+        ("華文一甲", "06", "陳奕愷"),
+        ("華文一甲", "07", "彭立雅"),
+        ("華文一甲", "08", "林芸函"),
+    ]
+    for r in samples:
+        writer.writerow(r)
+    return buf.getvalue().encode("utf-8-sig")
+
+
+def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
+    """點擊座次表時直接加減該生總分（與搶答抽籤總分共用並同步存檔）"""
+    with state["lock"]:
+        old_val = int(state["scores"].get(seat, 0))
+        new_val = max(0, old_val + delta)
+        actual_delta = new_val - old_val
+        state["scores"][seat] = new_val
+        save_persisted_state(state)
+
+    if record_undo and actual_delta != 0:
+        st.session_state.seating_undo_stack.append((seat, actual_delta))
+        if len(st.session_state.seating_undo_stack) > 30:
+            st.session_state.seating_undo_stack.pop(0)
+
+    stu_info = state.get("roster", {}).get(seat, {})
+    stu_name = stu_info.get("name", "")
+    display_who = f"{seat}號 {stu_name}".strip()
+    if actual_delta > 0:
+        st.session_state["seating_toast_msg"] = f"⭐ {display_who} +{actual_delta} 分（目前總分 {new_val} 分）"
+    elif actual_delta < 0:
+        st.session_state["seating_toast_msg"] = f"➖ {display_who} {actual_delta} 分（目前總分 {new_val} 分）"
+    else:
+        st.session_state["seating_toast_msg"] = f"ℹ️ {display_who} 目前已是 0 分"
+
+
+def undo_last_seating_click():
+    """復原上一筆在座次表的點擊加減分"""
+    if not st.session_state.seating_undo_stack:
+        return
+    seat, last_delta = st.session_state.seating_undo_stack.pop()
+    adjust_seat_score(seat, -last_delta, record_undo=False)
+    stu_name = state.get("roster", {}).get(seat, {}).get("name", "")
+    st.session_state["seating_toast_msg"] = f"↩️ 已復原 {seat}號 {stu_name} 的上一筆變動（目前 {state['scores'].get(seat, 0)} 分）"
+
+
 def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, awarded_list=None):
     awarded_set = set(awarded_list or [])
+    roster = state.get("roster", {})
     if rolling:
         pills = "".join(f'<div class="rolling-pill">{num}</div>' for num in winners)
         inner = (
@@ -443,6 +488,12 @@ def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, 
     elif winners:
         pills_list = []
         for idx, num in enumerate(winners):
+            stu_name = roster.get(num, {}).get("name", "")
+            name_html = (
+                f'<span style="font-size:1.1rem; font-weight:900; color:#1e293b; margin-top:2px;">{stu_name}</span>'
+                if stu_name
+                else ""
+            )
             got_pts = (
                 f'<span style="background:#059669; color:#ffffff; font-size:0.76rem; font-weight:900; padding:2px 10px; border-radius:999px; margin-top:4px;">✓ 已加分</span>'
                 if num in awarded_set
@@ -451,7 +502,8 @@ def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, 
             pills_list.append(
                 f'<div class="winner-pill">'
                 f'<span style="background:#78350f; color:#fef08a; font-size:1.15rem; font-weight:900; padding:4px 18px; border-radius:999px; letter-spacing:0.06em; margin-bottom:6px;">第 {idx + 1} 位</span>'
-                f'<span style="font-size:3.6rem; font-weight:900; line-height:1.05; margin-top:2px;">{num}</span>'
+                f'<span style="font-size:3.5rem; font-weight:900; line-height:1.02; margin-top:2px;">{num}</span>'
+                f'{name_html}'
                 f'{got_pts}'
                 f'</div>'
             )
@@ -579,9 +631,37 @@ if st.session_state.view_mode == "admin":
             st.rerun()
 
     with top_c5:
-        if st.button("🏫 開啟新課堂", use_container_width=True, help="全部重置回到原始狀態（題次歸 1、清空名單、記分板與發言紀錄全部歸零）"):
+        if st.button("🏫 開啟新課堂", use_container_width=True, help="全部重置回到原始狀態（題次歸 1、清空名單、記分板與發言紀錄全部歸零；保留已匯入的班級座次名單）"):
             st.session_state.confirm_new_class = True
             st.rerun()
+
+    # --- 2.0 雙畫面工作區切換列（搶答抽籤主控台 vs 全班座次表互動記分） ---
+    tab_c1, tab_c2, tab_c3 = st.columns([2.2, 2.2, 5.6])
+    with tab_c1:
+        if st.button(
+            "🎯 搶答抽籤主控台",
+            use_container_width=True,
+            type="primary" if st.session_state.admin_tab == "draw" else "secondary",
+            key="switch_tab_draw_btn",
+        ):
+            st.session_state.admin_tab = "draw"
+            st.rerun()
+    with tab_c2:
+        roster_cnt = len(state.get("roster", {}))
+        seating_btn_label = f"🗺️ 全班座次表記分（{roster_cnt}人）" if roster_cnt > 0 else "🗺️ 全班座次表記分"
+        if st.button(
+            seating_btn_label,
+            use_container_width=True,
+            type="primary" if st.session_state.admin_tab == "seating" else "secondary",
+            key="switch_tab_seating_btn",
+        ):
+            st.session_state.admin_tab = "seating"
+            st.rerun()
+    with tab_c3:
+        st.markdown(
+            '<div style="font-size:0.82rem; color:#64748b; padding-top:8px;">💡 兩邊成績即時同步加總：抽籤得分與點擊座次表加分會自動合併於同一總分！</div>',
+            unsafe_allow_html=True,
+        )
 
     # 開啟新課堂防誤按確認橫幅
     if st.session_state.confirm_new_class:
@@ -612,7 +692,170 @@ if st.session_state.view_mode == "admin":
     if st.session_state.pop("new_class_toast", False):
         st.toast("🏫 已開啟新課堂，所有紀錄已全部重置回到原始狀態！")
 
-    # --- 主畫面雙欄佈局：左 8 欄 / 右 4 欄 ---
+    if st.session_state.pop("seating_toast_msg", None):
+        st.toast(st.session_state.pop("seating_toast_msg", ""))
+
+    # ========================================================
+    # 分頁 B：🗺️ 全班座次表互動記分 (8 列 × 8 欄，由下往上排列)
+    # ========================================================
+    if st.session_state.admin_tab == "seating":
+        roster = state.get("roster", {})
+
+        # 1. 上方操作與 CSV 匯入工具列
+        with st.container(border=True):
+            ctrl_c1, ctrl_c2, ctrl_c3, ctrl_c4 = st.columns([2.4, 2.2, 1.8, 3.6])
+            with ctrl_c1:
+                if st.button(
+                    "➕ 目前模式：點擊座位 +1 分",
+                    use_container_width=True,
+                    type="primary" if st.session_state.seating_click_mode == "add" else "secondary",
+                    key="seating_mode_add_btn",
+                ):
+                    st.session_state.seating_click_mode = "add"
+                    st.rerun()
+            with ctrl_c2:
+                if st.button(
+                    "➖ 目前模式：點錯扣分 (-1 分)",
+                    use_container_width=True,
+                    type="primary" if st.session_state.seating_click_mode == "sub" else "secondary",
+                    key="seating_mode_sub_btn",
+                ):
+                    st.session_state.seating_click_mode = "sub"
+                    st.rerun()
+            with ctrl_c3:
+                undo_len = len(st.session_state.seating_undo_stack)
+                st.button(
+                    f"↩️ 復原上一筆 ({undo_len})" if undo_len > 0 else "↩️ 復原上一筆",
+                    disabled=(undo_len == 0),
+                    use_container_width=True,
+                    key="seating_undo_btn",
+                    on_click=undo_last_seating_click,
+                )
+            with ctrl_c4:
+                csv_bytes, _ = build_scores_csv(
+                    state["scores"],
+                    state["picked_history"],
+                    sort_mode="seat",
+                    roster_dict=roster,
+                )
+                today_str = datetime.now().strftime("%Y%m%d")
+                safe_title = "".join(c for c in state["course_title"] if c.isalnum() or c in ("_", "-")) or "課堂成績"
+                st.download_button(
+                    label="📥 下載合併總分 Excel/CSV（供助教登記）",
+                    data=csv_bytes,
+                    file_name=f"{safe_title}_合併成績表_{today_str}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="seating_download_csv_btn",
+                )
+
+            with st.expander("📂 匯入 / 更新班級名單 CSV（欄位：班級、座號、姓名）", expanded=(len(roster) == 0)):
+                up_c1, up_c2, up_c3 = st.columns([4.5, 2.5, 3.0])
+                with up_c1:
+                    uploaded_csv = st.file_uploader(
+                        "選擇班級名單 CSV 檔",
+                        type=["csv"],
+                        label_visibility="collapsed",
+                        key="roster_csv_uploader",
+                    )
+                    if uploaded_csv is not None:
+                        if st.button("✅ 確認匯入此 CSV 名單", type="primary", use_container_width=True, key="confirm_import_roster_btn"):
+                            try:
+                                new_roster = parse_roster_csv_bytes(uploaded_csv.getvalue())
+                                with state["lock"]:
+                                    state["roster"] = new_roster
+                                    save_persisted_state(state)
+                                st.toast(f"🎉 成功匯入 {len(new_roster)} 位同學的座次表資料！")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"匯入失敗：{e}")
+                with up_c2:
+                    st.download_button(
+                        label="📄 下載 CSV 範本",
+                        data=generate_sample_roster_csv(),
+                        file_name="班級座次表範本.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        key="download_sample_roster_btn",
+                    )
+                with up_c3:
+                    st.caption("格式說明：標題列請命名為 **班級、座號、姓名**（共三欄，無需學號）。匯入後系統會自動保存，下次上課免重傳。")
+
+        # 2. 渲染 8 列 × 8 欄座次表（第 8 排在最上方，第 1 排 01~08 在最下方靠近講台）
+        if st.session_state.seating_click_mode == "add":
+            st.info("👆 **加分模式啟用中**：直接點擊下方任一位同學的座位按鈕，該生總分即 **+1 分**（與搶答得分自動合併）。")
+        else:
+            st.warning("👇 **扣分修正模式啟用中**：點擊任一位同學的座位按鈕，該生總分即 **-1 分**（最低 0 分）；修正完畢請切回加分模式。")
+
+        is_add_mode = st.session_state.seating_click_mode == "add"
+        action_delta = 1 if is_add_mode else -1
+
+        # 由最上排（第 8 排：57~64）往下渲染至最下排（第 1 排：01~08）
+        for row_idx in range(7, -1, -1):
+            row_cols = st.columns(8, gap="small")
+            for col_idx in range(8):
+                seat_int = row_idx * 8 + col_idx + 1
+                seat_str = f"{seat_int:02d}"
+                stu_info = roster.get(seat_str)
+                cur_score = int(state["scores"].get(seat_str, 0))
+
+                with row_cols[col_idx]:
+                    if stu_info:
+                        cls_label = stu_info.get("class_name", "") or "　"
+                        name_label = stu_info.get("name", "") or "未命名"
+                        card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-box"
+                        score_badge_bg = "#d97706" if cur_score > 0 else "#64748b"
+                        st.markdown(
+                            f'<div class="{card_cls}">'
+                            f'<div style="font-size:0.72rem; font-weight:700; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{cls_label}</div>'
+                            f'<div style="font-size:1.35rem; font-weight:900; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
+                            f'<div style="font-size:0.95rem; font-weight:800; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{name_label}</div>'
+                            f'<div style="margin-top:4px;"><span style="background:{score_badge_bg}; color:#ffffff; font-size:0.75rem; font-weight:900; padding:1px 8px; border-radius:999px;">⭐ {cur_score} 分</span></div>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+                        btn_text = f"➕ {seat_str} (+1)" if is_add_mode else f"➖ {seat_str} (-1)"
+                        st.button(
+                            btn_text,
+                            key=f"seat_click_{seat_str}",
+                            use_container_width=True,
+                            type="primary" if (is_add_mode and cur_score > 0) else "secondary",
+                            on_click=adjust_seat_score,
+                            args=(seat_str, action_delta, True),
+                        )
+                    else:
+                        # 尚未匯入名單或該座號為空位（仍顯示座號，並支援直接點擊計分）
+                        card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-empty"
+                        if cur_score > 0:
+                            st.markdown(
+                                f'<div class="{card_cls}">'
+                                f'<div style="font-size:0.72rem; color:#64748b;">空位 / 未建檔</div>'
+                                f'<div style="font-size:1.35rem; font-weight:900; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
+                                f'<div style="margin-top:4px;"><span style="background:#d97706; color:#ffffff; font-size:0.75rem; font-weight:900; padding:1px 8px; border-radius:999px;">⭐ {cur_score} 分</span></div>'
+                                f'</div>',
+                                unsafe_allow_html=True,
+                            )
+                        else:
+                            st.markdown(
+                                f'<div class="seat-card-empty"><div style="font-size:1.15rem; font-weight:900; color:#94a3b8;">{seat_str}</div><div>空位</div></div>',
+                                unsafe_allow_html=True,
+                            )
+                        btn_text = f"➕ {seat_str}" if is_add_mode else f"➖ {seat_str}"
+                        st.button(
+                            btn_text,
+                            key=f"seat_empty_click_{seat_str}",
+                            use_container_width=True,
+                            on_click=adjust_seat_score,
+                            args=(seat_str, action_delta, True),
+                        )
+
+        # 最下方正中央講台標示
+        st.markdown('<div class="podium-banner">講　　　　台</div>', unsafe_allow_html=True)
+        st.stop()
+
+    # ========================================================
+    # 分頁 A：🎯 搶答抽籤主控台（完整保留原本雙欄佈局與全部功能）
+    # ========================================================
     left_col, right_col = st.columns([8, 4], gap="large")
 
     # ---------------- 左側 8 欄：聚光燈 + 給分操作 + 舉手候選名單（每 2 秒局部自動同步） ----------------
@@ -927,9 +1170,11 @@ if st.session_state.view_mode == "admin":
                             prefix = '<span style="font-size:0.8rem; font-weight:800; color:#6366f1;">座號</span>'
 
                         bg_style = "background:#fffbeb; border-color:#fcd34d;" if (sc > 0 and unique_desc_scores and sc == unique_desc_scores[0]) else "background:#f8fafc; border-color:#e2e8f0;"
+                        stu_name_tag = state.get("roster", {}).get(seat, {}).get("name", "")
+                        display_seat_label = f"{seat} 號 {stu_name_tag}".strip()
                         rows_html.append(
                             f'<div style="display:flex; align-items:center; justify-content:space-between; {bg_style} border:1.5px solid; border-radius:12px; padding:7px 12px; margin-top:6px;">'
-                            f'<div style="display:flex; align-items:center; gap:8px;">{prefix}<span style="font-size:1.2rem; font-weight:900; color:#0f172a;">{seat} 號</span></div>'
+                            f'<div style="display:flex; align-items:center; gap:8px;">{prefix}<span style="font-size:1.1rem; font-weight:900; color:#0f172a;">{display_seat_label}</span></div>'
                             f'<div style="background:#4f46e5; color:#ffffff; font-size:0.95rem; font-weight:900; padding:2px 12px; border-radius:999px;">{sc} 分</div>'
                             f'</div>'
                         )
@@ -944,6 +1189,7 @@ if st.session_state.view_mode == "admin":
                         state["scores"],
                         state["picked_history"],
                         sort_mode=st.session_state.scoreboard_sort,
+                        roster_dict=state.get("roster", {}),
                     )
                     today_str = datetime.now().strftime("%Y%m%d")
                     safe_title = "".join(c for c in state["course_title"] if c.isalnum() or c in ("_", "-")) or "課堂成績"
