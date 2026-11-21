@@ -30,14 +30,15 @@ st.markdown(
         -ms-touch-action: manipulation !important;
         -webkit-tap-highlight-color: transparent;
     }
-    /* 防止手機瀏覽器「下拉重新整理 (Pull-to-Refresh)」導致誤觸重整 */
+    /* 確保手機與平板在放大畫面時可以順暢上下滑動到底，不被視窗鎖住 */
     html, body, [data-testid="stAppViewContainer"], .main {
-        overscroll-behavior-y: contain !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
     }
-    /* 保留足夠頂部安全距離，避免最上方「學生端 / 老師端」按鈕被頂部工具列遮擋 */
+    /* 保留足夠頂部與底部安全距離，避免放大或滑動到底部時被工具列遮擋 */
     .block-container {
         padding-top: 3.2rem !important;
-        padding-bottom: 2rem !important;
+        padding-bottom: 5.5rem !important;
         max-width: 1400px;
     }
     /* 聚光燈舞台外框 */
@@ -209,7 +210,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 強制設定手機/平板 viewport 禁止雙擊自動縮放（針對 iOS Safari / Android Chrome 加強防護）
+# 允許雙指自由縮放與上下捲動到底（連點雙擊縮放已由上方 touch-action: manipulation 防護）
 components.html(
     """
     <script>
@@ -222,7 +223,7 @@ components.html(
                 meta.name = 'viewport';
                 doc.head.appendChild(meta);
             }
-            meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+            meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes');
         } catch (e) {}
     })();
     </script>
