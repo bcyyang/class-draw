@@ -30,6 +30,10 @@ st.markdown(
         -ms-touch-action: manipulation !important;
         -webkit-tap-highlight-color: transparent;
     }
+    /* 防止手機瀏覽器「下拉重新整理 (Pull-to-Refresh)」導致誤觸重整 */
+    html, body, [data-testid="stAppViewContainer"], .main {
+        overscroll-behavior-y: contain !important;
+    }
     /* 保留足夠頂部安全距離，避免最上方「學生端 / 老師端」按鈕被頂部工具列遮擋 */
     .block-container {
         padding-top: 3.2rem !important;
@@ -234,6 +238,7 @@ STATE_FILE = "classroom_state.json"
 
 DEFAULT_CLASSROOM_DATA = {
     "course_title": "課堂即時搶答抽籤",
+    "admin_pin": "1234",  # 老師端自訂 PIN 碼（預設 1234，可隨時重設並同步保存）
     "round_id": 1,
     "is_open": True,
     "candidates": {},      # { "05": timestamp }
@@ -376,6 +381,8 @@ if "awarded_winners" not in state:
     state["awarded_winners"] = []
 if "auto_award" not in state:
     state["auto_award"] = True
+if "admin_pin" not in state or not str(state["admin_pin"]).strip():
+    state["admin_pin"] = "1234"
 if "active_slot" not in state:
     state["active_slot"] = "slot_1"
 if "rosters" not in state:
@@ -392,15 +399,24 @@ DEFAULT_PIN = "1234"
 # 3. 個人連線裝置狀態 (st.session_state)
 # ==========================================
 query_mode = st.query_params.get("mode", "")
+query_auth = st.query_params.get("auth", "")
+query_tab = st.query_params.get("tab", "")
+
 if "view_mode" not in st.session_state:
     st.session_state.view_mode = "admin" if query_mode == "admin" else "student"
 elif query_mode == "admin":
     st.session_state.view_mode = "admin"
 
 if "admin_unlocked" not in st.session_state:
-    st.session_state.admin_unlocked = False
+    st.session_state.admin_unlocked = (query_auth == "1")
+elif query_auth == "1":
+    st.session_state.admin_unlocked = True
+
 if "admin_tab" not in st.session_state:
-    st.session_state.admin_tab = "draw"  # "draw" (搶答抽籤) | "seating" (全班座次表)
+    st.session_state.admin_tab = "seating" if query_tab == "seating" else "draw"  # "draw" (搶答抽籤) | "seating" (全班座次表)
+elif query_tab in ("draw", "seating"):
+    st.session_state.admin_tab = query_tab
+
 if "seating_click_mode" not in st.session_state:
     st.session_state.seating_click_mode = "add"  # "add" (+1分) | "sub" (-1分)
 if "seating_undo_stack" not in st.session_state:
@@ -778,13 +794,7 @@ with nav_col1:
 with nav_col2:
     if st.button(
         "📱 學生端",
-        use_container_width=True,
-        type="primary" if st.session_state.view_mode == "student" else "secondary",
-    ):
-        st.session_state.view_mode = "student"
-        st.query_params.clear()
-        st.rerun()
-with nav_col3:
+    with nav_col3:
     if st.button(
         "🖥️ 老師端",
         use_container_width=True,
@@ -792,6 +802,9 @@ with nav_col3:
     ):
         st.session_state.view_mode = "admin"
         st.query_params["mode"] = "admin"
+        if st.session_state.admin_unlocked:
+            st.query_params["auth"] = "1"
+            st.query_params["tab"] = st.session_state.admin_tab
         st.rerun()
 
 # ==========================================
@@ -804,18 +817,30 @@ if st.session_state.view_mode == "admin":
         _, lock_col, _ = st.columns([1, 1.4, 1])
         with lock_col:
             st.markdown("### 🔒 老師主控台解鎖")
-            st.caption("預設 PIN 碼為 `1234`（解鎖後本機連線期間將自動記住）")
-            pin_val = st.text_input("請輸入 4 碼 PIN 碼", type="password", max_chars=4)
+            st.caption("請輸入老師密碼（預設為 `1234`，解鎖後本機連線期間將自動記住）")
+            pin_val = st.text_input("請輸入老師密碼", type="password", max_chars=12)
             if st.button("確認解鎖", type="primary", use_container_width=True):
-                if pin_val.strip() == DEFAULT_PIN:
+                current_pin = str(state.get("admin_pin", DEFAULT_PIN)).strip()
+                if pin_val.strip() == current_pin:
                     st.session_state.admin_unlocked = True
+                    st.query_params["mode"] = "admin"
+                    st.query_params["auth"] = "1"
+                    st.query_params["tab"] = st.session_state.admin_tab
                     st.rerun()
                 else:
-                    st.error("PIN 碼錯誤，請重新輸入！")
+                    st.error("密碼錯誤，請重新輸入！")
+
+            with st.expander("❓ 忘記密碼？重設為預設密碼 (1234)"):
+                st.caption("若忘記先前自訂的老師密碼，可在此將密碼重設回預設值 `1234`（不會清除課堂分數與名單）。")
+                if st.button("🔄 重設密碼為 1234", use_container_width=True, key="forgot_reset_pin_btn"):
+                    with state["lock"]:
+                        state["admin_pin"] = DEFAULT_PIN
+                        save_persisted_state(state)
+                    st.success("✅ 密碼已重設為 `1234`，請在上方輸入 `1234` 解鎖！")
         st.stop()
 
     # --- 頂部課程標題與開題控制列（加寬題次與重置題次按鈕，確保清晰可見） ---
-    top_c1, top_c2, top_c2_reset, top_c3, top_c4, top_c5 = st.columns([2.8, 1.2, 1.2, 1.8, 1.8, 1.4])
+    top_c1, top_c2, top_c2_reset, top_c3, top_c4, top_c5, top_c6 = st.columns([2.5, 1.1, 1.1, 1.7, 1.7, 1.3, 1.1])
     with top_c1:
         new_title = st.text_input(
             "課程名稱",
@@ -874,6 +899,44 @@ if st.session_state.view_mode == "admin":
             on_click=open_new_class_confirm,
         )
 
+    with top_c6:
+        if st.button("🔑 密碼", use_container_width=True, help="修改老師端密碼或立即鎖定主控台", key="toggle_pin_panel_btn"):
+            st.session_state["show_pin_settings"] = not st.session_state.get("show_pin_settings", False)
+            st.rerun()
+
+    # 密碼修改與鎖定面板
+    if st.session_state.get("show_pin_settings", False):
+        with st.container(border=True):
+            p_c1, p_c2, p_c3, p_c4 = st.columns([3.2, 2.8, 2.0, 2.0])
+            with p_c1:
+                st.markdown(f"**🔑 老師主控台密碼設定**（目前密碼：`{state.get('admin_pin', DEFAULT_PIN)}`）")
+            with p_c2:
+                new_pin_val = st.text_input(
+                    "新密碼",
+                    placeholder="輸入新密碼（4～12碼）",
+                    max_chars=12,
+                    label_visibility="collapsed",
+                    key="new_admin_pin_input",
+                )
+            with p_c3:
+                if st.button("💾 儲存新密碼", type="primary", use_container_width=True, key="save_new_pin_btn"):
+                    clean_pin = new_pin_val.strip()
+                    if len(clean_pin) < 4:
+                        st.error("密碼至少需 4 碼！")
+                    else:
+                        with state["lock"]:
+                            state["admin_pin"] = clean_pin
+                            save_persisted_state(state)
+                        st.session_state["show_pin_settings"] = False
+                        st.toast(f"✅ 老師密碼已更新為「{clean_pin}」！")
+                        st.rerun()
+            with p_c4:
+                if st.button("🔒 立即鎖定螢幕", use_container_width=True, key="lock_admin_now_btn"):
+                    st.session_state.admin_unlocked = False
+                    st.session_state["show_pin_settings"] = False
+                    st.query_params.pop("auth", None)
+                    st.rerun()
+
     # --- 2.0 雙畫面工作區切換 + 三班名單一鍵切換列 ---
     tab_c1, tab_c2, tab_c3 = st.columns([2.1, 2.2, 5.7])
     with tab_c1:
@@ -884,6 +947,7 @@ if st.session_state.view_mode == "admin":
             key="switch_tab_draw_btn",
         ):
             st.session_state.admin_tab = "draw"
+            st.query_params["tab"] = "draw"
             st.rerun()
     with tab_c2:
         active_roster_now = get_active_roster(state)
@@ -896,6 +960,7 @@ if st.session_state.view_mode == "admin":
             key="switch_tab_seating_btn",
         ):
             st.session_state.admin_tab = "seating"
+            st.query_params["tab"] = "seating"
             st.rerun()
     with tab_c3:
         slot_keys = ["slot_1", "slot_2", "slot_3"]
