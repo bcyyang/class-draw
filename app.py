@@ -214,6 +214,15 @@ if "play_fanfare_once" not in st.session_state:
     st.session_state.play_fanfare_once = False
 if "scoreboard_sort" not in st.session_state:
     st.session_state.scoreboard_sort = "score"  # "score" 或 "seat"
+if "round_points_input" not in st.session_state:
+    st.session_state.round_points_input = int(state.get("round_points", 1))
+
+
+def sync_round_points_from_widget():
+    """當老師點擊本題配分的 +/- 號時平滑同步至共用狀態，不需額外強制 rerun"""
+    with state["lock"]:
+        state["round_points"] = int(st.session_state.round_points_input)
+
 
 # ==========================================
 # 4. 核心工具函式（加權抽籤、QR Code、Web Audio 音效）
@@ -641,18 +650,15 @@ if st.session_state.view_mode == "admin":
                     key="draw_count",
                 )
             with cfg_c2:
-                new_pts = st.number_input(
+                st.number_input(
                     "本題配分（分）",
                     min_value=1,
                     max_value=50,
-                    value=int(state.get("round_points", 1)),
                     step=1,
+                    key="round_points_input",
+                    on_change=sync_round_points_from_widget,
                     help="依題目難度設定本題答對可得幾分（例如簡單題 1 分、挑戰題 2~5 分）",
                 )
-                if new_pts != state.get("round_points", 1):
-                    with state["lock"]:
-                        state["round_points"] = int(new_pts)
-                    st.rerun()
 
             st.toggle(
                 "🔊 啟用抽籤跳號與中獎音效",
