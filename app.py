@@ -347,6 +347,107 @@ def reset_entire_classroom():
         state["picked_history"] = {}
         state["last_winners"] = []
         state["scores"] = {}
+        state["awarded_winners"] = []
+        save_persisted_state(state)
+    st.session_state.seating_undo_stack = []
+    st.session_state.confirm_new_class = False
+    st.session_state["new_class_toast"] = True
+
+
+# ==========================================
+# 4. 核心演算法、音效、CSV 匯出與座次表輔助函式
+# ==========================================
+def normalize_seat_num(raw_text: str) -> str:
+    """標準化座號格式（例如將 '5' 自動補零成 '05'，統一兩位數流水號）"""
+    clean = str(raw_text).strip().upper()
+    if not clean:
+        return ""
+    if clean.isdigit() and len(clean) == 1:
+        return f"0{clean}"
+    return clean
+
+
+def pick_weighted_candidates(candidates_dict, history_dict, count=1, weighted=True):
+    """公平抽籤演算法：未曾抽中者擁有 3x 優先權重"""
+    pool = list(candidates_dict.keys())
+    selected = []
+    pick_total = min(int(count), len(pool))
+    for _ in range(pick_total):
+        if weighted:
+            weights = [3 if history_dict.get(num, 0) == 0 else 1 for num in pool]
+        else:
+            weights = [1 for _ in pool]
+        chosen = random.choices(pool, weights=weights, k=1)[0]
+        selected.append(chosen)
+        pool.remove(chosen)
+    return selected
+
+
+def generate_qr_base64(url: str) -> str:
+    """產生學生端掃碼 QR Code 圖片 Base64"""
+    qr = qrcode.QRCode(version=1, box_size=8, border=2)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#0f172a", back_color="#ffffff")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def play_sound_effect(kind="fanfare", enabled=True):
+    """透過 Web Audio API 播放抽籤跳號與中獎音效"""
+    if not enabled:
+        return
+    if kind == "rolling":
+        js_code = """
+        <script>
+        (function() {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioCtx();
+                for (let i = 0; i < 12; i++) {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(480 + (i % 4) * 95, ctx.currentTime + i * 0.095);
+                    gain.gain.setValueAtTime(0.10, ctx.currentTime + i * 0.095);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.095 + 0.07);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(ctx.currentTime + i * 0.095);
+                    osc.stop(ctx.currentTime + i * 0.095 + 0.07);
+                }
+            } catch (e) {}
+        })();
+        </script>
+        """
+    else:
+        js_code = """
+        <script>
+        (function() {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioCtx();
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, idx) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.09);
+                    gain.gain.setValueAtTime(0.18, ctx.currentTime + idx * 0.09);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.09 + 0.28);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(ctx.currentTime + idx * 0.09);
+                    osc.stop(ctx.currentTime + idx * 0.09 + 0.28);
+                });
+            } catch (e) {}
+        })();
+        </script>
+        """
+    components.html(js_code, height=0, width=0)
+
+
 def build_scores_csv(scores_dict, history_dict, sort_mode="seat", roster_dict=None):
     """產生含 UTF-8 BOM 的成績 CSV 資料（自動帶入班級、座號、姓名與合併總分）"""
     roster = roster_dict or {}
