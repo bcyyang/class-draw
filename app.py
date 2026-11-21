@@ -24,6 +24,12 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    /* 防止手機與平板在連續快速點擊加分時觸發「雙擊縮放畫面」並消除點擊延遲 */
+    html, body, button, [role="button"], input, .seat-card-box, .seat-card-empty {
+        touch-action: manipulation !important;
+        -ms-touch-action: manipulation !important;
+        -webkit-tap-highlight-color: transparent;
+    }
     /* 保留足夠頂部安全距離，避免最上方「學生端 / 老師端」按鈕被頂部工具列遮擋 */
     .block-container {
         padding-top: 3.2rem !important;
@@ -197,6 +203,28 @@ st.markdown(
     </style>
     """,
     unsafe_allow_html=True,
+)
+
+# 強制設定手機/平板 viewport 禁止雙擊自動縮放（針對 iOS Safari / Android Chrome 加強防護）
+components.html(
+    """
+    <script>
+    (function() {
+        try {
+            const doc = window.parent.document;
+            let meta = doc.querySelector('meta[name="viewport"]');
+            if (!meta) {
+                meta = doc.createElement('meta');
+                meta.name = 'viewport';
+                doc.head.appendChild(meta);
+            }
+            meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+        } catch (e) {}
+    })();
+    </script>
+    """,
+    height=0,
+    width=0,
 )
 
 # ==========================================
