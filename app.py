@@ -525,6 +525,7 @@ if st.session_state.view_mode == "admin":
 
     # ---------------- 左側 8 欄：抽籤結果聚光燈 + 快速給分列 + 即時候選名單 ----------------
     with left_col:
+        @st.fragment(run_every=2)
         def live_admin_left_board():
             pts_now = state.get("round_points", 1)
             awarded_now = state.get("awarded_winners", [])
@@ -603,7 +604,7 @@ if st.session_state.view_mode == "admin":
                             now_ts = time.time()
                             for idx, num in enumerate(to_add):
                                 state["candidates"][num] = now_ts + idx * 0.01
-                        st.rerun(scope="app")
+                        st.rerun()
                 with header_c3:
                     manual_num = st.text_input(
                         "手動座號",
@@ -617,10 +618,10 @@ if st.session_state.view_mode == "admin":
                         if clean:
                             with state["lock"]:
                                 state["candidates"][clean] = time.time()
-                            st.rerun(scope="app")
+                            st.rerun()
                 with header_c5:
                     if st.button("🔄 同步", use_container_width=True, help="立即從伺服器同步最新名單與中籤畫面"):
-                        st.rerun(scope="app")
+                        st.rerun()
 
                 if not sorted_nums:
                     st.markdown(
@@ -937,6 +938,7 @@ else:
     _, stu_col, _ = st.columns([1, 1.4, 1])
     with stu_col:
 
+        @st.fragment(run_every=2)
         def student_live_panel():
             current_round = state["round_id"]
             is_open = state["is_open"]
@@ -1003,11 +1005,11 @@ else:
                         st.info("👀 請抬頭看教室大螢幕等待老師抽籤！當老師開啟**下一題**時，此畫面會自動解鎖。")
 
                     if st.button("🔄 立即刷新最新抽籤結果", use_container_width=True):
-                        st.rerun(scope="app")
+                        st.rerun()
                 elif not is_open:
                     st.warning("⏸️ 本題已截止舉手報名，老師正在進行抽籤或討論中，請等待下一題！")
                     if st.button("🔄 檢查是否已開啟下一題", use_container_width=True):
-                        st.rerun(scope="app")
+                        st.rerun()
                 else:
                     num_input = st.text_input(
                         "請輸入你的座號",
@@ -1027,6 +1029,6 @@ else:
                                 state["candidates"][clean_num] = time.time()
                             st.session_state.student_saved_num = clean_num
                             st.session_state.submitted_round = current_round
-                            st.rerun(scope="app")
+                            st.rerun()
 
         student_live_panel()
