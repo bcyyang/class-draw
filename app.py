@@ -306,6 +306,8 @@ if "history_sort" not in st.session_state:
     st.session_state.history_sort = "count"  # "count" 或 "seat"
 if "confirm_new_class" not in st.session_state:
     st.session_state.confirm_new_class = False
+if "uploader_reset_id" not in st.session_state:
+    st.session_state.uploader_reset_id = 0
 if "round_points_input" not in st.session_state:
     st.session_state.round_points_input = int(state.get("round_points", 1))
 if "auto_award_input" not in st.session_state:
@@ -858,7 +860,7 @@ if st.session_state.view_mode == "admin":
                         "選擇班級名單 CSV 檔",
                         type=["csv"],
                         label_visibility="collapsed",
-                        key="roster_csv_uploader",
+                        key=f"roster_csv_uploader_{st.session_state.uploader_reset_id}",
                     )
                     if uploaded_csv is not None:
                         if st.button("✅ 確認匯入此 CSV 名單", type="primary", use_container_width=True, key="confirm_import_roster_btn"):
@@ -867,6 +869,7 @@ if st.session_state.view_mode == "admin":
                                 with state["lock"]:
                                     state["roster"] = new_roster
                                     save_persisted_state(state)
+                                st.session_state.uploader_reset_id += 1
                                 st.toast(f"🎉 成功匯入 {len(new_roster)} 位同學的座次表資料！")
                                 st.rerun()
                             except Exception as e:
