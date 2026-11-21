@@ -171,9 +171,20 @@ def get_shared_classroom_state():
         "candidates": {},      # { "05": timestamp }
         "picked_history": {},  # { "05": count }
         "last_winners": [],    # ["05", "18"]
+        "scores": {},          # { "05": 4, "18": 2 } 累計總分
+        "round_points": 1,     # 本題預設配分
+        "awarded_winners": [], # 本輪已給過分的座號，防止重複誤按
     }
 
 state = get_shared_classroom_state()
+# 確保舊快取記憶體物件升級時具備新欄位
+if "scores" not in state:
+    state["scores"] = {}
+if "round_points" not in state:
+    state["round_points"] = 1
+if "awarded_winners" not in state:
+    state["awarded_winners"] = []
+
 DEFAULT_PIN = "1234"
 
 # ==========================================
@@ -201,6 +212,8 @@ if "sound_enabled" not in st.session_state:
     st.session_state.sound_enabled = True
 if "play_fanfare_once" not in st.session_state:
     st.session_state.play_fanfare_once = False
+if "scoreboard_sort" not in st.session_state:
+    st.session_state.scoreboard_sort = "score"  # "score" 或 "seat"
 
 # ==========================================
 # 4. 核心工具函式（加權抽籤、QR Code、Web Audio 音效）
@@ -295,19 +308,8 @@ def pick_weighted_candidates(candidates_dict, history_dict, count, weighted=True
 def generate_qr_base64(url_text: str) -> str:
     qr = qrcode.QRCode(
         version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_M,
-        box_size=8,
-        border=2,
-    )
-    qr.add_data(url_text)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="#0f172a", back_color="#ffffff")
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return base64.b64encode(buf.getvalue()).decode("utf-8")
-
-
-def render_spotlight_html(winners, rolling=False, total_pool=0):
+def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, awarded_list=None):
+    awarded_set = set(awarded_list or [])
     if rolling:
         pills = "".join(f'<div class="rolling-pill">{num}</div>' for num in winners)
         inner = (
@@ -316,16 +318,24 @@ def render_spotlight_html(winners, rolling=False, total_pool=0):
             f'<div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:center;">{pills}</div>'
         )
     elif winners:
-        pills = "".join(
-            f'<div class="winner-pill">'
-            f'<span style="background:#78350f; color:#fef08a; font-size:0.82rem; font-weight:900; padding:2px 12px; border-radius:999px; letter-spacing:0.06em; margin-bottom:4px;">第 {idx + 1} 位</span>'
-            f'<span style="font-size:3.6rem; font-weight:900; line-height:1.05; margin-top:2px;">{num}</span>'
-            f'</div>'
-            for idx, num in enumerate(winners)
-        )
+        pills_list = []
+        for idx, num in enumerate(winners):
+            got_pts = (
+                f'<span style="background:#059669; color:#ffffff; font-size:0.76rem; font-weight:900; padding:2px 10px; border-radius:999px; margin-top:4px;">✓ 已加分</span>'
+                if num in awarded_set
+                else f'<span style="background:rgba(15,23,42,0.12); color:#422006; font-size:0.74rem; font-weight:800; padding:2px 10px; border-radius:999px; margin-top:4px;">待給 {round_points} 分</span>'
+            )
+            pills_list.append(
+                f'<div class="winner-pill">'
+                f'<span style="background:#78350f; color:#fef08a; font-size:0.82rem; font-weight:900; padding:2px 12px; border-radius:999px; letter-spacing:0.06em; margin-bottom:4px;">第 {idx + 1} 位</span>'
+                f'<span style="font-size:3.6rem; font-weight:900; line-height:1.05; margin-top:2px;">{num}</span>'
+                f'{got_pts}'
+                f'</div>'
+            )
+        pills = "".join(pills_list)
         inner = (
             f'<div style="color:#fde047; font-size:0.98rem; font-weight:800; letter-spacing:0.06em; margin-bottom:10px;">'
-            f'🎉 恭喜以下 {len(winners)} 位同學獲得發言機會！</div>'
+            f'🎉 恭喜以下 {len(winners)} 位同學獲得發言機會！（本題配分：{round_points} 分）</div>'
             f'<div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:center;">{pills}</div>'
         )
     else:
@@ -333,11 +343,14 @@ def render_spotlight_html(winners, rolling=False, total_pool=0):
             '<div style="color:#e0e7ff; font-size:1.18rem; font-weight:700;">'
             '等待同學舉手加入名單後，點擊右側「開始公平抽籤」</div>'
             '<div style="color:#a5b4fc; font-size:0.86rem; margin-top:6px;">'
-            '抽中後將自動從本題候選名單移除，並更新加權紀錄</div>'
+            '抽中後將自動從本題候選名單移除，並可依題目難度給予得分</div>'
         )
     return (
         '<div class="spotlight-box">'
-        '<div style="text-align:left; font-size:1.2rem; font-weight:900; margin-bottom:12px;">🎯 本題中籤發言同學</div>'
+        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">'
+        f'<span style="font-size:1.2rem; font-weight:900;">🎯 本題中籤發言同學</span>'
+        f'<span style="background:rgba(253,224,71,0.2); border:1px solid rgba(253,224,71,0.5); color:#fde047; font-size:0.88rem; font-weight:900; padding:4px 14px; border-radius:999px;">⭐ 本題配分：{round_points} 分</span>'
+        f'</div>'
         f'<div class="spotlight-inner">{inner}</div>'
         '</div>'
     )
@@ -391,31 +404,6 @@ if st.session_state.view_mode == "admin":
                     st.error("PIN 碼錯誤，請重新輸入！")
         st.stop()
 
-    # 行動裝置連線守護腳本：防止老師手機瀏覽器休眠導致 WebSocket 停止更新
-    components.html(
-        """
-        <script>
-        (function() {
-            const parentWin = window.parent;
-            if (!parentWin._adminWakeSyncAttached) {
-                parentWin._adminWakeSyncAttached = true;
-                let lastActive = Date.now();
-                parentWin.document.addEventListener("visibilitychange", function() {
-                    if (parentWin.document.visibilityState === "visible") {
-                        if (Date.now() - lastActive > 3000) {
-                            parentWin.location.reload();
-                        }
-                        lastActive = Date.now();
-                    }
-                });
-            }
-        })();
-        </script>
-        """,
-        height=0,
-        width=0,
-    )
-
     # --- 頂部課程標題與開題控制列（加寬題次與重置題次按鈕，確保清晰可見） ---
     top_c1, top_c2, top_c2_reset, top_c3, top_c4 = st.columns([3.3, 1.4, 1.3, 2.0, 2.0])
     with top_c1:
@@ -441,6 +429,7 @@ if st.session_state.view_mode == "admin":
                 state["is_open"] = True
                 state["candidates"] = {}
                 state["last_winners"] = []
+                state["awarded_winners"] = []
             st.toast("↩️ 已將題次重置為第 1 題！")
             st.rerun()
 
@@ -463,6 +452,7 @@ if st.session_state.view_mode == "admin":
                 state["is_open"] = True
                 state["candidates"] = {}
                 state["last_winners"] = []
+                state["awarded_winners"] = []
             st.toast(f"✨ 已開啟第 {state['round_id']} 題，全班手機已自動解鎖！")
             st.rerun()
 
@@ -471,18 +461,71 @@ if st.session_state.view_mode == "admin":
         play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
         st.session_state.play_fanfare_once = False
 
-    # --- 主內容經典雙欄網格：左側 8 欄（聚光燈 + 候選名單）/ 右側 4 欄（抽籤規則 + 已發言紀錄 + QR Code） ---
+    # --- 主內容經典雙欄網格：左側 8 欄（聚光燈 + 給分區 + 候選名單）/ 右側 4 欄（抽籤規則 + 記分板 + 已發言紀錄 + QR Code） ---
     left_col, right_col = st.columns([8, 4], gap="large")
 
-    # ---------------- 左側 8 欄：抽籤結果聚光燈 + 即時候選名單 ----------------
+    # ---------------- 左側 8 欄：抽籤結果聚光燈 + 快速給分列 + 即時候選名單 ----------------
     with left_col:
-        @st.fragment(run_every=2)
         def live_admin_left_board():
+            pts_now = state.get("round_points", 1)
+            awarded_now = state.get("awarded_winners", [])
             spotlight_placeholder = st.empty()
             spotlight_placeholder.markdown(
-                render_spotlight_html(state["last_winners"], rolling=False),
+                render_spotlight_html(
+                    state["last_winners"],
+                    rolling=False,
+                    round_points=pts_now,
+                    awarded_list=awarded_now,
+                ),
                 unsafe_allow_html=True,
             )
+
+            # --- 中籤給分操作條（抽出同學後自動出現） ---
+            current_winners = list(state.get("last_winners", []))
+            if current_winners:
+                with st.container(border=True):
+                    g_c1, g_c2 = st.columns([2.4, 3.6])
+                    with g_c1:
+                        st.markdown(f"**⭐ 本題給分（答對 +{pts_now} 分）**")
+                        un_awarded = [w for w in current_winners if w not in awarded_now]
+                        if un_awarded:
+                            if st.button(
+                                f"🎉 全部中籤者 +{pts_now} 分",
+                                type="primary",
+                                use_container_width=True,
+                                key="award_all_winners_btn",
+                            ):
+                                with state["lock"]:
+                                    for w in un_awarded:
+                                        state["scores"][w] = state["scores"].get(w, 0) + pts_now
+                                        if w not in state["awarded_winners"]:
+                                            state["awarded_winners"].append(w)
+                                play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
+                                st.toast(f"⭐ 已為 {', '.join(un_awarded)} 號加上 {pts_now} 分！")
+                                st.rerun(scope="app")
+                        else:
+                            st.success("✅ 本輪中籤同學皆已完成給分")
+
+                    with g_c2:
+                        st.caption("個別給分（若只有部分同學答對，可單獨點按座號加分）：")
+                        w_cols = st.columns(min(len(current_winners), 5))
+                        for idx, w_num in enumerate(current_winners):
+                            is_done = w_num in awarded_now
+                            btn_label = f"✅ {w_num}號 (已+{pts_now})" if is_done else f"➕ {w_num}號 (+{pts_now}分)"
+                            with w_cols[idx % 5]:
+                                if st.button(
+                                    btn_label,
+                                    key=f"award_single_{w_num}_{idx}",
+                                    use_container_width=True,
+                                    disabled=is_done,
+                                ):
+                                    with state["lock"]:
+                                        state["scores"][w_num] = state["scores"].get(w_num, 0) + pts_now
+                                        if w_num not in state["awarded_winners"]:
+                                            state["awarded_winners"].append(w_num)
+                                    play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
+                                    st.toast(f"⭐ {w_num} 號獲得 {pts_now} 分！")
+                                    st.rerun(scope="app")
 
             with st.container(border=True):
                 candidates = state["candidates"]
@@ -548,8 +591,10 @@ if st.session_state.view_mode == "admin":
                             )
 
                         with cols[idx % 4]:
+                            cur_pts = state["scores"].get(num, 0)
+                            pts_tag = f' · <b style="color:#4f46e5;">{cur_pts}分</b>' if cur_pts > 0 else ""
                             st.markdown(
-                                f'<div class="{card_cls}"><div class="candidate-num">{num}</div>{badge_html}</div>',
+                                f'<div class="{card_cls}"><div class="candidate-num">{num}</div>{badge_html}<div style="font-size:0.72rem; color:#64748b; margin-top:3px;">累計{pts_tag if pts_tag else " 0分"}</div></div>',
                                 unsafe_allow_html=True,
                             )
 
@@ -557,7 +602,7 @@ if st.session_state.view_mode == "admin":
 
         spotlight_placeholder = live_admin_left_board()
 
-    # ---------------- 右側 4 欄：抽籤規則 + 已發言紀錄 + QR Code ----------------
+    # ---------------- 右側 4 欄：抽籤規則 + 課堂記分板 + 已發言紀錄 + QR Code ----------------
     with right_col:
         # 1. 抽籤規則與啟動卡片
         with st.container(border=True):
@@ -574,13 +619,28 @@ if st.session_state.view_mode == "admin":
                 st.session_state.draw_mode = mode_choice
                 st.rerun()
 
-            st.session_state.draw_count = st.number_input(
-                "本題抽取人數（位）",
-                min_value=1,
-                max_value=50,
-                value=st.session_state.draw_count,
-                step=1,
-            )
+            cfg_c1, cfg_c2 = st.columns(2)
+            with cfg_c1:
+                st.session_state.draw_count = st.number_input(
+                    "抽取人數（位）",
+                    min_value=1,
+                    max_value=50,
+                    value=st.session_state.draw_count,
+                    step=1,
+                )
+            with cfg_c2:
+                new_pts = st.number_input(
+                    "本題配分（分）",
+                    min_value=1,
+                    max_value=50,
+                    value=int(state.get("round_points", 1)),
+                    step=1,
+                    help="依題目難度設定本題答對可得幾分（例如簡單題 1 分、挑戰題 2~5 分）",
+                )
+                if new_pts != state.get("round_points", 1):
+                    with state["lock"]:
+                        state["round_points"] = int(new_pts)
+                    st.rerun()
 
             st.session_state.sound_enabled = st.toggle(
                 "🔊 啟用抽籤跳號與中獎音效",
@@ -599,13 +659,19 @@ if st.session_state.view_mode == "admin":
                         weighted=(st.session_state.draw_mode == "weighted"),
                     )
                     pool_nums = list(current_candidates.keys())
+                    pts_val = state.get("round_points", 1)
 
                     play_sound_effect("rolling", enabled=st.session_state.sound_enabled)
 
                     for _ in range(15):
                         fake_sample = [random.choice(pool_nums) for _ in range(len(winners))]
                         spotlight_placeholder.markdown(
-                            render_spotlight_html(fake_sample, rolling=True, total_pool=len(pool_nums)),
+                            render_spotlight_html(
+                                fake_sample,
+                                rolling=True,
+                                total_pool=len(pool_nums),
+                                round_points=pts_val,
+                            ),
                             unsafe_allow_html=True,
                         )
                         time.sleep(0.085)
@@ -614,9 +680,117 @@ if st.session_state.view_mode == "admin":
                         for w in winners:
                             state["candidates"].pop(w, None)
                             state["picked_history"][w] = state["picked_history"].get(w, 0) + 1
+                            state["scores"].setdefault(w, 0)
                         state["last_winners"] = winners
-        # 2. 本堂課已發言紀錄卡片（支援每 2 秒即時同步多裝置紀錄）
-        @st.fragment(run_every=2)
+                        state["awarded_winners"] = []
+
+                    st.session_state.play_fanfare_once = True
+                    st.rerun()
+
+        # 2. 🏆 課堂即時記分板（支援依得分排名 / 依座號排序 + 手動加扣分微調）
+        def live_admin_scoreboard_card():
+            with st.container(border=True):
+                sb_h1, sb_h2 = st.columns([2.5, 1.5])
+                with sb_h1:
+                    st.markdown("#### 🏆 課堂即時記分板")
+                with sb_h2:
+                    if st.button("🧹 清空分數", use_container_width=True, help="將全班所有座號的得分歸零"):
+                        with state["lock"]:
+                            state["scores"] = {}
+                            state["awarded_winners"] = []
+                        st.toast("🧹 已清空全班記分板分數！")
+                        st.rerun(scope="app")
+
+                sort_c1, sort_c2 = st.columns(2)
+                with sort_c1:
+                    if st.button(
+                        "🥇 依得分排名",
+                        use_container_width=True,
+                        type="primary" if st.session_state.scoreboard_sort == "score" else "secondary",
+                        key="sort_by_score_btn",
+                    ):
+                        st.session_state.scoreboard_sort = "score"
+                        st.rerun()
+                with sort_c2:
+                    if st.button(
+                        "🔢 依座號排序",
+                        use_container_width=True,
+                        type="primary" if st.session_state.scoreboard_sort == "seat" else "secondary",
+                        key="sort_by_seat_btn",
+                    ):
+                        st.session_state.scoreboard_sort = "seat"
+                        st.rerun()
+
+                # 合併所有出現過的座號（有分數者 + 曾被抽中者）
+                all_seats = set(state["scores"].keys()) | set(state["picked_history"].keys())
+                score_items = [(seat, state["scores"].get(seat, 0)) for seat in all_seats]
+
+                if not score_items:
+                    st.markdown(
+                        '<div style="padding:14px 12px; border-radius:12px; background:#f8fafc; border:1px dashed #cbd5e1; color:#94a3b8; font-size:0.88rem; text-align:center; margin-top:6px;">尚無得分紀錄（抽中同學並給分後將自動顯示於此）</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    if st.session_state.scoreboard_sort == "score":
+                        # 依分數由高到低排序，同分則依座號由小到大
+                        score_items.sort(key=lambda x: (-x[1], int(x[0]) if x[0].isdigit() else 9999, x[0]))
+                    else:
+                        # 依座號由小到大排序
+                        score_items.sort(key=lambda x: (int(x[0]) if x[0].isdigit() else 9999, x[0]))
+
+                    # 計算名次（同分同名次）
+                    unique_desc_scores = sorted({sc for _, sc in score_items if sc > 0}, reverse=True)
+                    rows_html = []
+                    for seat, sc in score_items:
+                        if st.session_state.scoreboard_sort == "score":
+                            if sc > 0 and sc in unique_desc_scores:
+                                rank = unique_desc_scores.index(sc) + 1
+                                if rank == 1:
+                                    prefix = '<span style="font-size:1.1rem;">🥇</span>'
+                                elif rank == 2:
+                                    prefix = '<span style="font-size:1.1rem;">🥈</span>'
+                                elif rank == 3:
+                                    prefix = '<span style="font-size:1.1rem;">🥉</span>'
+                                else:
+                                    prefix = f'<span style="font-size:0.8rem; font-weight:800; color:#64748b; min-width:22px; text-align:center;">#{rank}</span>'
+                            else:
+                                prefix = '<span style="font-size:0.8rem; font-weight:700; color:#94a3b8; min-width:22px; text-align:center;">-</span>'
+                        else:
+                            prefix = '<span style="font-size:0.8rem; font-weight:800; color:#6366f1;">座號</span>'
+
+                        bg_style = "background:#fffbeb; border-color:#fcd34d;" if (sc > 0 and unique_desc_scores and sc == unique_desc_scores[0]) else "background:#f8fafc; border-color:#e2e8f0;"
+                        rows_html.append(
+                            f'<div style="display:flex; align-items:center; justify-content:space-between; {bg_style} border:1.5px solid; border-radius:12px; padding:7px 12px; margin-top:6px;">'
+                            f'<div style="display:flex; align-items:center; gap:8px;">{prefix}<span style="font-size:1.2rem; font-weight:900; color:#0f172a;">{seat} 號</span></div>'
+                            f'<div style="background:#4f46e5; color:#ffffff; font-size:0.95rem; font-weight:900; padding:2px 12px; border-radius:999px;">{sc} 分</div>'
+                            f'</div>'
+                        )
+
+                    st.markdown(
+                        f'<div style="max-height:300px; overflow-y:auto; padding-right:2px;">{"".join(rows_html)}</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                # 手動補加 / 扣分微調列
+                with st.expander("✏️ 手動補加 / 扣分微調"):
+                    adj_c1, adj_c2, adj_c3 = st.columns([1.4, 1.3, 1.3])
+                    with adj_c1:
+                        adj_seat = st.text_input("座號", placeholder="如 05", label_visibility="collapsed", key="adj_seat_box")
+                    with adj_c2:
+                        adj_delta = st.number_input("加減分", min_value=-20, max_value=50, value=1, step=1, label_visibility="collapsed", key="adj_delta_box")
+                    with adj_c3:
+                        if st.button("套用", use_container_width=True, key="apply_adj_score_btn"):
+                            clean_s = normalize_seat_num(adj_seat)
+                            if clean_s:
+                                with state["lock"]:
+                                    new_val = max(0, state["scores"].get(clean_s, 0) + int(adj_delta))
+                                    state["scores"][clean_s] = new_val
+                                st.toast(f"已調整 {clean_s} 號分數（目前 {new_val} 分）")
+                                st.rerun(scope="app")
+
+        live_admin_scoreboard_card()
+
+        # 3. 本堂課已發言紀錄卡片
         def live_admin_history_card():
             with st.container(border=True):
                 hist_h1, hist_h2 = st.columns([2.6, 1.4])
@@ -672,35 +846,9 @@ if st.session_state.view_mode == "admin":
 # 7. 學生手機端 (STUDENT VIEW)
 # ==========================================
 else:
-    # 注入前端喚醒偵測：當手機點亮螢幕或切回瀏覽器分頁時，自動重新同步最新抽籤結果
-    components.html(
-        """
-        <script>
-        (function() {
-            const parentWin = window.parent;
-            if (!parentWin._wakeSyncAttached) {
-                parentWin._wakeSyncAttached = true;
-                let lastActive = Date.now();
-                parentWin.document.addEventListener("visibilitychange", function() {
-                    if (parentWin.document.visibilityState === "visible") {
-                        if (Date.now() - lastActive > 4000) {
-                            parentWin.location.reload();
-                        }
-                        lastActive = Date.now();
-                    }
-                });
-            }
-        })();
-        </script>
-        """,
-        height=0,
-        width=0,
-    )
-
     _, stu_col, _ = st.columns([1, 1.4, 1])
     with stu_col:
 
-        @st.fragment(run_every=2)
         def student_live_panel():
             current_round = state["round_id"]
             is_open = state["is_open"]
@@ -726,9 +874,23 @@ else:
             with st.container(border=True):
                 last_winners = list(state.get("last_winners", []))
                 saved_num = normalize_seat_num(st.session_state.student_saved_num)
+                my_total_score = state.get("scores", {}).get(saved_num, 0) if saved_num else 0
+                pts_this_round = state.get("round_points", 1)
+
+                if saved_num:
+                    st.markdown(
+                        f'<div style="text-align:right; margin-bottom:8px;"><span style="background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; font-size:0.85rem; font-weight:900; padding:4px 12px; border-radius:999px;">🏆 {saved_num} 號目前累積：{my_total_score} 分</span></div>',
+                        unsafe_allow_html=True,
+                    )
 
                 if already_submitted and saved_num and saved_num in last_winners:
                     order_num = last_winners.index(saved_num) + 1
+                    got_awarded = saved_num in state.get("awarded_winners", [])
+                    pts_notice = (
+                        f"⭐ 老師已為你加上 {pts_this_round} 分（目前總分 {my_total_score} 分）！"
+                        if got_awarded
+                        else f"本題答對可得 {pts_this_round} 分，請準備回答問題 🎤"
+                    )
                     st.markdown(
                         f"""
                         <div style="background:linear-gradient(135deg, #fde047 0%, #facc15 100%); border:3px solid #eab308; border-radius:20px; padding:24px 16px; text-align:center; color:#0f172a; box-shadow:0 10px 25px rgba(250,204,21,0.35);">
@@ -738,7 +900,7 @@ else:
                             </div>
                             <div style="font-size:1.45rem; font-weight:900; margin-top:10px;">恭喜 {saved_num} 號中籤！</div>
                             <div style="font-size:0.9rem; font-weight:700; color:#422006; margin-top:6px;">
-                                請準備回答問題 🎤
+                                {pts_notice}
                             </div>
                         </div>
                         """,
