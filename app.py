@@ -388,7 +388,7 @@ def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, 
             )
             pills_list.append(
                 f'<div class="winner-pill">'
-                f'<span style="background:#78350f; color:#fef08a; font-size:0.82rem; font-weight:900; padding:2px 12px; border-radius:999px; letter-spacing:0.06em; margin-bottom:4px;">第 {idx + 1} 位</span>'
+                f'<span style="background:#78350f; color:#fef08a; font-size:1.15rem; font-weight:900; padding:4px 18px; border-radius:999px; letter-spacing:0.06em; margin-bottom:6px;">第 {idx + 1} 位</span>'
                 f'<span style="font-size:3.6rem; font-weight:900; line-height:1.05; margin-top:2px;">{num}</span>'
                 f'{got_pts}'
                 f'</div>'
@@ -1016,7 +1016,7 @@ else:
                         f"""
                         <div style="background:linear-gradient(135deg, #fde047 0%, #facc15 100%); border:3px solid #eab308; border-radius:20px; padding:24px 16px; text-align:center; color:#0f172a; box-shadow:0 10px 25px rgba(250,204,21,0.35);">
                             <div style="font-size:2.6rem; line-height:1;">🎉</div>
-                            <div style="display:inline-block; background:#78350f; color:#fef08a; font-size:0.95rem; font-weight:900; padding:4px 16px; border-radius:999px; margin-top:8px;">
+                            <div style="display:inline-block; background:#78350f; color:#fef08a; font-size:1.25rem; font-weight:900; padding:6px 20px; border-radius:999px; margin-top:8px;">
                                 第 {order_num} 位發言
                             </div>
                             <div style="font-size:1.45rem; font-weight:900; margin-top:10px;">恭喜 {saved_num} 號中籤！</div>
