@@ -1,8 +1,10 @@
 import io
+import csv
 import time
 import random
 import base64
 import threading
+from datetime import datetime
 import streamlit as st
 import streamlit.components.v1 as components
 import qrcode
@@ -337,6 +339,35 @@ def generate_qr_base64(url_text: str) -> str:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def build_scores_csv(scores_dict, history_dict, sort_mode="seat"):
+    """產生含 UTF-8 BOM 的成績 CSV 資料（Excel 直接開啟不亂碼）與純文字預覽"""
+    all_seats = set(scores_dict.keys()) | set(history_dict.keys())
+    items = [
+        (seat, int(scores_dict.get(seat, 0)), int(history_dict.get(seat, 0)))
+        for seat in all_seats
+    ]
+    if sort_mode == "score":
+        items.sort(key=lambda x: (-x[1], int(x[0]) if x[0].isdigit() else 9999, x[0]))
+    else:
+        items.sort(key=lambda x: (int(x[0]) if x[0].isdigit() else 9999, x[0]))
+
+    unique_desc_scores = sorted({sc for _, sc, _ in items if sc > 0}, reverse=True)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["座號", "本堂課總分", "發言次數", "得分名次"])
+
+    plain_lines = ["座號\t總分\t發言次數"]
+    for seat, sc, cnt in items:
+        rank_str = str(unique_desc_scores.index(sc) + 1) if (sc > 0 and sc in unique_desc_scores) else "-"
+        writer.writerow([seat, sc, cnt, rank_str])
+        plain_lines.append(f"{seat}號\t{sc}分\t({cnt}次)")
+
+    # 加上 utf-8-sig (BOM) 讓 Excel 雙擊開啟時中文標題不亂碼
+    csv_bytes = output.getvalue().encode("utf-8-sig")
+    return csv_bytes, "\n".join(plain_lines)
 
 
 def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, awarded_list=None):
@@ -810,6 +841,26 @@ if st.session_state.view_mode == "admin":
                         f'<div style="max-height:300px; overflow-y:auto; padding-right:2px;">{"".join(rows_html)}</div>',
                         unsafe_allow_html=True,
                     )
+
+                    # --- 助教成績匯出區 (CSV 下載 + 快速複製文字版) ---
+                    csv_bytes, plain_summary = build_scores_csv(
+                        state["scores"],
+                        state["picked_history"],
+                        sort_mode=st.session_state.scoreboard_sort,
+                    )
+                    today_str = datetime.now().strftime("%Y%m%d")
+                    safe_title = "".join(c for c in state["course_title"] if c.isalnum() or c in ("_", "-")) or "課堂成績"
+                    st.download_button(
+                        label="📥 下載成績 Excel/CSV（供助教登記）",
+                        data=csv_bytes,
+                        file_name=f"{safe_title}_成績表_{today_str}.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        type="primary",
+                        key="download_scores_csv_btn",
+                    )
+                    with st.expander("📋 快速複製文字版成績（貼上 LINE / 試算表）"):
+                        st.code(plain_summary, language="text")
 
                 # 手動補加 / 扣分微調列
                 with st.expander("✏️ 手動補加 / 扣分微調"):
