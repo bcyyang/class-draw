@@ -239,6 +239,15 @@ def sync_auto_award_from_widget():
         state["auto_award"] = bool(st.session_state.auto_award_input)
 
 
+def clear_all_scoreboard_records():
+    """透過 on_click 回呼清空全班記分板紀錄並安全重置勾選狀態"""
+    with state["lock"]:
+        state["scores"] = {}
+        state["awarded_winners"] = []
+    st.session_state["confirm_clear_scores_chk"] = False
+    st.session_state["scores_cleared_toast"] = True
+
+
 def normalize_seat_num(raw_text: str) -> str:
     """標準化座號：1~9 的單一位數自動在前面補 0（例如 '5' -> '05'）"""
     clean = (raw_text or "").strip().upper()
@@ -516,6 +525,9 @@ if st.session_state.view_mode == "admin":
     if st.session_state.play_fanfare_once:
         play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
         st.session_state.play_fanfare_once = False
+
+    if st.session_state.pop("scores_cleared_toast", False):
+        st.toast("🗑️ 已刪除全部課堂記分板紀錄！")
 
     # --- 主畫面雙欄佈局：左 8 欄 / 右 4 欄 ---
     left_col, right_col = st.columns([8, 4], gap="large")
@@ -881,18 +893,13 @@ if st.session_state.view_mode == "admin":
                         "確認要刪除全部記分板紀錄（此動作無法復原）",
                         key="confirm_clear_scores_chk",
                     )
-                    if st.button(
+                    st.button(
                         "🗑️ 刪除全部記分板紀錄",
                         disabled=not confirm_clear_scores,
                         use_container_width=True,
                         key="clear_all_scores_btn",
-                    ):
-                        with state["lock"]:
-                            state["scores"] = {}
-                            state["awarded_winners"] = []
-                        st.session_state.confirm_clear_scores_chk = False
-                        st.toast("🗑️ 已刪除全部課堂記分板紀錄！")
-                        st.rerun()
+                        on_click=clear_all_scoreboard_records,
+                    )
 
         live_admin_scoreboard_card()
 
