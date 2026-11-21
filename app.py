@@ -767,16 +767,7 @@ if st.session_state.view_mode == "admin":
         # 2. 🏆 課堂即時記分板（支援依得分排名 / 依座號排序 + 手動加扣分微調）
         def live_admin_scoreboard_card():
             with st.container(border=True):
-                sb_h1, sb_h2 = st.columns([2.5, 1.5])
-                with sb_h1:
-                    st.markdown("#### 🏆 課堂即時記分板")
-                with sb_h2:
-                    if st.button("🧹 清空分數", use_container_width=True, help="將全班所有座號的得分歸零"):
-                        with state["lock"]:
-                            state["scores"] = {}
-                            state["awarded_winners"] = []
-                        st.toast("🧹 已清空全班記分板分數！")
-                        st.rerun()
+                st.markdown("#### 🏆 課堂即時記分板")
 
                 sort_c1, sort_c2 = st.columns(2)
                 with sort_c1:
