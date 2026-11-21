@@ -219,6 +219,8 @@ if "play_fanfare_once" not in st.session_state:
     st.session_state.play_fanfare_once = False
 if "scoreboard_sort" not in st.session_state:
     st.session_state.scoreboard_sort = "score"  # "score" 或 "seat"
+if "history_sort" not in st.session_state:
+    st.session_state.history_sort = "count"  # "count" 或 "seat"
 if "round_points_input" not in st.session_state:
     st.session_state.round_points_input = int(state.get("round_points", 1))
 if "auto_award_input" not in st.session_state:
@@ -894,13 +896,42 @@ if st.session_state.view_mode == "admin":
 
                 st.caption("作為「未曾抽中者 3x 加權」的依據；下課或換班時可點右上角重置。")
 
+                h_sort_c1, h_sort_c2 = st.columns(2)
+                with h_sort_c1:
+                    if st.button(
+                        "🔥 依發言次數排序",
+                        use_container_width=True,
+                        type="primary" if st.session_state.history_sort == "count" else "secondary",
+                        key="hist_sort_by_count_btn",
+                    ):
+                        st.session_state.history_sort = "count"
+                        st.rerun()
+                with h_sort_c2:
+                    if st.button(
+                        "🔢 依座號排序",
+                        use_container_width=True,
+                        type="primary" if st.session_state.history_sort == "seat" else "secondary",
+                        key="hist_sort_by_seat_btn",
+                    ):
+                        st.session_state.history_sort = "seat"
+                        st.rerun()
+
                 if not state["picked_history"]:
                     st.markdown(
-                        '<div style="padding:14px 12px; border-radius:12px; background:#f8fafc; border:1px dashed #cbd5e1; color:#94a3b8; font-size:0.9rem; text-align:center;">尚未抽出任何同學</div>',
+                        '<div style="padding:14px 12px; border-radius:12px; background:#f8fafc; border:1px dashed #cbd5e1; color:#94a3b8; font-size:0.9rem; text-align:center; margin-top:6px;">尚未抽出任何同學</div>',
                         unsafe_allow_html=True,
                     )
                 else:
-                    sorted_hist = sorted(state["picked_history"].items(), key=lambda x: -x[1])
+                    if st.session_state.history_sort == "seat":
+                        sorted_hist = sorted(
+                            state["picked_history"].items(),
+                            key=lambda x: (int(x[0]) if x[0].isdigit() else 9999, x[0]),
+                        )
+                    else:
+                        sorted_hist = sorted(
+                            state["picked_history"].items(),
+                            key=lambda x: (-x[1], int(x[0]) if x[0].isdigit() else 9999, x[0]),
+                        )
                     badges_html = "".join(
                         f'<div style="display:inline-flex; align-items:center; gap:8px; background:#f1f5f9; border:2px solid #cbd5e1; border-radius:14px; padding:8px 14px; margin:4px 6px 4px 0;">'
                         f'<span style="font-size:1.35rem; font-weight:900; color:#0f172a;">{num}</span>'
@@ -909,7 +940,7 @@ if st.session_state.view_mode == "admin":
                         for num, cnt in sorted_hist
                     )
                     st.markdown(
-                        f'<div style="display:flex; flex-wrap:wrap; align-items:center; padding-top:4px;">{badges_html}</div>',
+                        f'<div style="display:flex; flex-wrap:wrap; align-items:center; padding-top:6px;">{badges_html}</div>',
                         unsafe_allow_html=True,
                     )
 
