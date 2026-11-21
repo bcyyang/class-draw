@@ -633,12 +633,12 @@ if st.session_state.view_mode == "admin":
 
             cfg_c1, cfg_c2 = st.columns(2)
             with cfg_c1:
-                st.session_state.draw_count = st.number_input(
+                st.number_input(
                     "抽取人數（位）",
                     min_value=1,
                     max_value=50,
-                    value=st.session_state.draw_count,
                     step=1,
+                    key="draw_count",
                 )
             with cfg_c2:
                 new_pts = st.number_input(
@@ -654,9 +654,9 @@ if st.session_state.view_mode == "admin":
                         state["round_points"] = int(new_pts)
                     st.rerun()
 
-            st.session_state.sound_enabled = st.toggle(
+            st.toggle(
                 "🔊 啟用抽籤跳號與中獎音效",
-                value=st.session_state.sound_enabled,
+                key="sound_enabled",
             )
 
             if st.button("🎰 開始公平抽籤", type="primary", use_container_width=True):
