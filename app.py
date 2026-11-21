@@ -232,11 +232,16 @@ def get_active_roster(state_dict: dict) -> dict:
 
 
 def get_slot_display_title(state_dict: dict, slot_key: str) -> str:
-    """組合班級槽位顯示名稱（若有匯入班級名稱則自動顯示，例如：班級1 · 華文一甲）"""
+    """組合班級槽位顯示名稱（優先使用老師自訂的班級名稱，否則自動偵測 CSV 班級或預設標籤）"""
     rosters = state_dict.get("rosters", {})
     slot_data = rosters.get(slot_key, {})
+    custom_name = slot_data.get("custom_name", "").strip()
     base_label = slot_data.get("label", f"班級 {slot_key[-1]}")
     students = slot_data.get("students", {})
+
+    if custom_name:
+        return f"{custom_name}（{len(students)}人）" if students else f"{custom_name}（未匯入）"
+
     if not students:
         return f"{base_label}（未匯入）"
     # 統計該名單中最常出現的班級名稱
@@ -249,6 +254,25 @@ def get_slot_display_title(state_dict: dict, slot_key: str) -> str:
     if top_class:
         return f"{base_label}：{top_class}（{len(students)}人）"
     return f"{base_label}（{len(students)}人）"
+
+
+def switch_active_class_slot(slot_key: str):
+    """立即切換目前上課班級槽位並寫入磁碟"""
+    with state["lock"]:
+        state["active_slot"] = slot_key
+        save_persisted_state(state)
+    st.session_state["class_switched_toast"] = f"📚 已切換至：{get_slot_display_title(state, slot_key)}"
+
+
+def save_slot_custom_name(slot_key: str):
+    """儲存老師自訂的班級名稱"""
+    input_key = f"custom_name_input_{slot_key}"
+    new_name = st.session_state.get(input_key, "").strip()
+    with state["lock"]:
+        if slot_key in state["rosters"]:
+            state["rosters"][slot_key]["custom_name"] = new_name
+            save_persisted_state(state)
+    st.session_state["class_switched_toast"] = f"✏️ 已更新班級名稱為「{new_name or state['rosters'][slot_key]['label']}」"
 
 
 def load_persisted_state() -> dict:
@@ -784,7 +808,7 @@ if st.session_state.view_mode == "admin":
             st.rerun()
 
     # --- 2.0 雙畫面工作區切換 + 三班名單一鍵切換列 ---
-    tab_c1, tab_c2, tab_c3 = st.columns([2.2, 2.3, 5.5])
+    tab_c1, tab_c2, tab_c3 = st.columns([2.1, 2.2, 5.7])
     with tab_c1:
         if st.button(
             "🎯 搶答抽籤主控台",
@@ -811,27 +835,19 @@ if st.session_state.view_mode == "admin":
         cur_slot = state.get("active_slot", "slot_1")
         if cur_slot not in slot_keys:
             cur_slot = "slot_1"
-        sel_c1, sel_c2 = st.columns([1.3, 3.7])
-        with sel_c1:
-            st.markdown(
-                '<div style="font-size:0.86rem; font-weight:800; color:#1e1b4b; padding-top:8px; text-align:right;">📚 目前上課班級：</div>',
-                unsafe_allow_html=True,
-            )
-        with sel_c2:
-            chosen_slot = st.selectbox(
-                "選擇目前上課班級",
-                options=slot_keys,
-                index=slot_keys.index(cur_slot),
-                format_func=lambda k: get_slot_display_title(state, k),
-                label_visibility="collapsed",
-                key="active_class_slot_selectbox",
-            )
-            if chosen_slot != cur_slot:
-                with state["lock"]:
-                    state["active_slot"] = chosen_slot
-                    save_persisted_state(state)
-                st.toast(f"📚 已切換至：{get_slot_display_title(state, chosen_slot)}")
-                st.rerun()
+        s_cols = st.columns(3, gap="small")
+        for idx, s_key in enumerate(slot_keys):
+            is_cur = (s_key == cur_slot)
+            btn_lbl = f"🟢 {get_slot_display_title(state, s_key)}" if is_cur else f"⚪ {get_slot_display_title(state, s_key)}"
+            with s_cols[idx]:
+                st.button(
+                    btn_lbl,
+                    key=f"top_quick_switch_{s_key}",
+                    use_container_width=True,
+                    type="primary" if is_cur else "secondary",
+                    on_click=switch_active_class_slot,
+                    args=(s_key,),
+                )
 
     # 開啟新課堂防誤按確認橫幅
     if st.session_state.confirm_new_class:
@@ -861,6 +877,10 @@ if st.session_state.view_mode == "admin":
 
     if st.session_state.pop("new_class_toast", False):
         st.toast("🏫 已開啟新課堂，所有紀錄已全部重置回到原始狀態！")
+
+    class_switched_toast = st.session_state.pop("class_switched_toast", None)
+    if class_switched_toast:
+        st.toast(class_switched_toast)
 
     seating_toast_msg = st.session_state.pop("seating_toast_msg", None)
     if seating_toast_msg:
@@ -947,6 +967,18 @@ if st.session_state.view_mode == "admin":
                             else:
                                 st.markdown(f"**⚪ {slot_title}**")
 
+                            # 自訂班級名稱輸入框
+                            cur_custom = state["rosters"][s_key].get("custom_name", "")
+                            st.text_input(
+                                f"班級 {idx + 1} 名稱",
+                                value=cur_custom,
+                                placeholder=f"輸入班級 {idx + 1} 名稱（如：華文一甲）",
+                                label_visibility="collapsed",
+                                key=f"custom_name_input_{s_key}",
+                                on_change=save_slot_custom_name,
+                                args=(s_key,),
+                            )
+
                             up_file = st.file_uploader(
                                 f"上傳{s_key}名單",
                                 type=["csv"],
@@ -975,11 +1007,13 @@ if st.session_state.view_mode == "admin":
                             b_c1, b_c2 = st.columns(2)
                             with b_c1:
                                 if not is_active_slot:
-                                    if st.button("切換使用", key=f"use_{s_key}_btn", use_container_width=True):
-                                        with state["lock"]:
-                                            state["active_slot"] = s_key
-                                            save_persisted_state(state)
-                                        st.rerun()
+                                    st.button(
+                                        "切換使用",
+                                        key=f"use_{s_key}_btn",
+                                        use_container_width=True,
+                                        on_click=switch_active_class_slot,
+                                        args=(s_key,),
+                                    )
                                 else:
                                     st.button("使用中", key=f"using_{s_key}_btn", disabled=True, use_container_width=True)
                             with b_c2:
