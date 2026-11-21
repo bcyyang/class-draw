@@ -215,13 +215,48 @@ DEFAULT_CLASSROOM_DATA = {
     "round_points": 1,     # 本題預設配分
     "awarded_winners": [], # 本輪已給過分的座號，防止重複誤按
     "auto_award": True,    # 抽中時是否直接自動給分
-    "roster": {},          # 2.0 新增：{ "01": {"class_name": "華文一甲", "seat": "01", "name": "莊子萱"}, ... }
+    "active_slot": "slot_1",  # 目前啟用的班級槽位 ("slot_1" | "slot_2" | "slot_3")
+    "rosters": {              # 三個班級獨立名單庫
+        "slot_1": {"label": "班級 1", "students": {}},
+        "slot_2": {"label": "班級 2", "students": {}},
+        "slot_3": {"label": "班級 3", "students": {}},
+    },
 }
+
+
+def get_active_roster(state_dict: dict) -> dict:
+    """取得目前所選班級的學生名單字典 {seat: info}"""
+    rosters = state_dict.get("rosters", {})
+    slot = state_dict.get("active_slot", "slot_1")
+    return rosters.get(slot, {}).get("students", {})
+
+
+def get_slot_display_title(state_dict: dict, slot_key: str) -> str:
+    """組合班級槽位顯示名稱（若有匯入班級名稱則自動顯示，例如：班級1 · 華文一甲）"""
+    rosters = state_dict.get("rosters", {})
+    slot_data = rosters.get(slot_key, {})
+    base_label = slot_data.get("label", f"班級 {slot_key[-1]}")
+    students = slot_data.get("students", {})
+    if not students:
+        return f"{base_label}（未匯入）"
+    # 統計該名單中最常出現的班級名稱
+    class_counts = {}
+    for info in students.values():
+        cname = info.get("class_name", "").strip()
+        if cname:
+            class_counts[cname] = class_counts.get(cname, 0) + 1
+    top_class = max(class_counts.items(), key=lambda x: x[1])[0] if class_counts else ""
+    if top_class:
+        return f"{base_label}：{top_class}（{len(students)}人）"
+    return f"{base_label}（{len(students)}人）"
 
 
 def load_persisted_state() -> dict:
     """啟動時從磁碟讀取前一次保留的課堂紀錄（若無檔案則回傳預設值）"""
-    data = {k: (v.copy() if isinstance(v, (dict, list)) else v) for k, v in DEFAULT_CLASSROOM_DATA.items()}
+    data = {
+        k: (json.loads(json.dumps(v)) if isinstance(v, (dict, list)) else v)
+        for k, v in DEFAULT_CLASSROOM_DATA.items()
+    }
     if os.path.exists(STATE_FILE):
         try:
             with open(STATE_FILE, "r", encoding="utf-8") as f:
@@ -230,6 +265,9 @@ def load_persisted_state() -> dict:
                 for k in DEFAULT_CLASSROOM_DATA:
                     if k in saved:
                         data[k] = saved[k]
+                # 向下相容：若舊存檔只有單一 roster，自動遷移至 slot_1
+                if "rosters" not in saved and isinstance(saved.get("roster"), dict) and saved["roster"]:
+                    data["rosters"]["slot_1"]["students"] = saved["roster"]
         except Exception:
             pass
     return data
@@ -264,8 +302,15 @@ if "awarded_winners" not in state:
     state["awarded_winners"] = []
 if "auto_award" not in state:
     state["auto_award"] = True
-if "roster" not in state:
-    state["roster"] = {}
+if "active_slot" not in state:
+    state["active_slot"] = "slot_1"
+if "rosters" not in state:
+    old_single = state.get("roster", {}) if isinstance(state.get("roster"), dict) else {}
+    state["rosters"] = {
+        "slot_1": {"label": "班級 1", "students": old_single},
+        "slot_2": {"label": "班級 2", "students": {}},
+        "slot_3": {"label": "班級 3", "students": {}},
+    }
 
 DEFAULT_PIN = "1234"
 
@@ -306,8 +351,8 @@ if "history_sort" not in st.session_state:
     st.session_state.history_sort = "count"  # "count" 或 "seat"
 if "confirm_new_class" not in st.session_state:
     st.session_state.confirm_new_class = False
-if "uploader_reset_id" not in st.session_state:
-    st.session_state.uploader_reset_id = 0
+if "uploader_reset_ids" not in st.session_state:
+    st.session_state.uploader_reset_ids = {"slot_1": 0, "slot_2": 0, "slot_3": 0}
 if "round_points_input" not in st.session_state:
     st.session_state.round_points_input = int(state.get("round_points", 1))
 if "auto_award_input" not in st.session_state:
@@ -557,7 +602,7 @@ def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
         if len(st.session_state.seating_undo_stack) > 30:
             st.session_state.seating_undo_stack.pop(0)
 
-    stu_info = state.get("roster", {}).get(seat, {})
+    stu_info = get_active_roster(state).get(seat, {})
     stu_name = stu_info.get("name", "")
     display_who = f"{seat}號 {stu_name}".strip()
     if actual_delta > 0:
@@ -574,13 +619,13 @@ def undo_last_seating_click():
         return
     seat, last_delta = st.session_state.seating_undo_stack.pop()
     adjust_seat_score(seat, -last_delta, record_undo=False)
-    stu_name = state.get("roster", {}).get(seat, {}).get("name", "")
+    stu_name = get_active_roster(state).get(seat, {}).get("name", "")
     st.session_state["seating_toast_msg"] = f"↩️ 已復原 {seat}號 {stu_name} 的上一筆變動（目前 {state['scores'].get(seat, 0)} 分）"
 
 
 def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, awarded_list=None):
     awarded_set = set(awarded_list or [])
-    roster = state.get("roster", {})
+    roster = get_active_roster(state)
     if rolling:
         pills = "".join(f'<div class="rolling-pill">{num}</div>' for num in winners)
         inner = (
@@ -734,12 +779,12 @@ if st.session_state.view_mode == "admin":
             st.rerun()
 
     with top_c5:
-        if st.button("🏫 開啟新課堂", use_container_width=True, help="全部重置回到原始狀態（題次歸 1、清空名單、記分板與發言紀錄全部歸零；保留已匯入的班級座次名單）"):
+        if st.button("🏫 開啟新課堂", use_container_width=True, help="全部重置回到原始狀態（題次歸 1、清空名單、記分板與發言紀錄全部歸零；保留已匯入的三班名單）"):
             st.session_state.confirm_new_class = True
             st.rerun()
 
-    # --- 2.0 雙畫面工作區切換列（搶答抽籤主控台 vs 全班座次表互動記分） ---
-    tab_c1, tab_c2, tab_c3 = st.columns([2.2, 2.2, 5.6])
+    # --- 2.0 雙畫面工作區切換 + 三班名單一鍵切換列 ---
+    tab_c1, tab_c2, tab_c3 = st.columns([2.2, 2.3, 5.5])
     with tab_c1:
         if st.button(
             "🎯 搶答抽籤主控台",
@@ -750,7 +795,8 @@ if st.session_state.view_mode == "admin":
             st.session_state.admin_tab = "draw"
             st.rerun()
     with tab_c2:
-        roster_cnt = len(state.get("roster", {}))
+        active_roster_now = get_active_roster(state)
+        roster_cnt = len(active_roster_now)
         seating_btn_label = f"🗺️ 全班座次表記分（{roster_cnt}人）" if roster_cnt > 0 else "🗺️ 全班座次表記分"
         if st.button(
             seating_btn_label,
@@ -761,10 +807,31 @@ if st.session_state.view_mode == "admin":
             st.session_state.admin_tab = "seating"
             st.rerun()
     with tab_c3:
-        st.markdown(
-            '<div style="font-size:0.82rem; color:#64748b; padding-top:8px;">💡 兩邊成績即時同步加總：抽籤得分與點擊座次表加分會自動合併於同一總分！</div>',
-            unsafe_allow_html=True,
-        )
+        slot_keys = ["slot_1", "slot_2", "slot_3"]
+        cur_slot = state.get("active_slot", "slot_1")
+        if cur_slot not in slot_keys:
+            cur_slot = "slot_1"
+        sel_c1, sel_c2 = st.columns([1.3, 3.7])
+        with sel_c1:
+            st.markdown(
+                '<div style="font-size:0.86rem; font-weight:800; color:#1e1b4b; padding-top:8px; text-align:right;">📚 目前上課班級：</div>',
+                unsafe_allow_html=True,
+            )
+        with sel_c2:
+            chosen_slot = st.selectbox(
+                "選擇目前上課班級",
+                options=slot_keys,
+                index=slot_keys.index(cur_slot),
+                format_func=lambda k: get_slot_display_title(state, k),
+                label_visibility="collapsed",
+                key="active_class_slot_selectbox",
+            )
+            if chosen_slot != cur_slot:
+                with state["lock"]:
+                    state["active_slot"] = chosen_slot
+                    save_persisted_state(state)
+                st.toast(f"📚 已切換至：{get_slot_display_title(state, chosen_slot)}")
+                st.rerun()
 
     # 開啟新課堂防誤按確認橫幅
     if st.session_state.confirm_new_class:
@@ -803,7 +870,8 @@ if st.session_state.view_mode == "admin":
     # 分頁 B：🗺️ 全班座次表互動記分 (8 列 × 8 欄，由下往上排列)
     # ========================================================
     if st.session_state.admin_tab == "seating":
-        roster = state.get("roster", {})
+        roster = get_active_roster(state)
+        cur_slot_key = state.get("active_slot", "slot_1")
 
         # 1. 上方操作與 CSV 匯入工具列
         with st.container(border=True):
@@ -844,37 +912,21 @@ if st.session_state.view_mode == "admin":
                 )
                 today_str = datetime.now().strftime("%Y%m%d")
                 safe_title = "".join(c for c in state["course_title"] if c.isalnum() or c in ("_", "-")) or "課堂成績"
+                slot_short_name = get_slot_display_title(state, cur_slot_key).split("（")[0].replace("：", "_")
                 st.download_button(
                     label="📥 下載合併總分 Excel/CSV（供助教登記）",
                     data=csv_bytes,
-                    file_name=f"{safe_title}_合併成績表_{today_str}.csv",
+                    file_name=f"{safe_title}_{slot_short_name}_合併成績表_{today_str}.csv",
                     mime="text/csv",
                     use_container_width=True,
                     key="seating_download_csv_btn",
                 )
 
-            with st.expander("📂 匯入 / 更新班級名單 CSV（欄位：班級、座號、姓名）", expanded=(len(roster) == 0)):
-                up_c1, up_c2, up_c3 = st.columns([4.5, 2.5, 3.0])
-                with up_c1:
-                    uploaded_csv = st.file_uploader(
-                        "選擇班級名單 CSV 檔",
-                        type=["csv"],
-                        label_visibility="collapsed",
-                        key=f"roster_csv_uploader_{st.session_state.uploader_reset_id}",
-                    )
-                    if uploaded_csv is not None:
-                        if st.button("✅ 確認匯入此 CSV 名單", type="primary", use_container_width=True, key="confirm_import_roster_btn"):
-                            try:
-                                new_roster = parse_roster_csv_bytes(uploaded_csv.getvalue())
-                                with state["lock"]:
-                                    state["roster"] = new_roster
-                                    save_persisted_state(state)
-                                st.session_state.uploader_reset_id += 1
-                                st.toast(f"🎉 成功匯入 {len(new_roster)} 位同學的座次表資料！")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"匯入失敗：{e}")
-                with up_c2:
+            with st.expander("📂 管理三個班級的 CSV 名單（分別上傳、永久保存、隨時切換）", expanded=(len(roster) == 0)):
+                info_c1, info_c2 = st.columns([7.5, 2.5])
+                with info_c1:
+                    st.caption("格式說明：CSV 標題列請命名為 **班級、座號、姓名**（共三欄，無需學號）。三個班級各自上傳後會永久保存在系統中，上課時從上方下拉選單切換班級即可。")
+                with info_c2:
                     st.download_button(
                         label="📄 下載 CSV 範本",
                         data=generate_sample_roster_csv(),
@@ -883,8 +935,61 @@ if st.session_state.view_mode == "admin":
                         use_container_width=True,
                         key="download_sample_roster_btn",
                     )
-                with up_c3:
-                    st.caption("格式說明：標題列請命名為 **班級、座號、姓名**（共三欄，無需學號）。匯入後系統會自動保存，下次上課免重傳。")
+
+                slot_cols = st.columns(3, gap="medium")
+                for idx, s_key in enumerate(["slot_1", "slot_2", "slot_3"]):
+                    with slot_cols[idx]:
+                        with st.container(border=True):
+                            slot_title = get_slot_display_title(state, s_key)
+                            is_active_slot = (s_key == cur_slot_key)
+                            if is_active_slot:
+                                st.markdown(f"**🟢 {slot_title}**（使用中）")
+                            else:
+                                st.markdown(f"**⚪ {slot_title}**")
+
+                            up_file = st.file_uploader(
+                                f"上傳{s_key}名單",
+                                type=["csv"],
+                                label_visibility="collapsed",
+                                key=f"roster_csv_uploader_{s_key}_{st.session_state.uploader_reset_ids.get(s_key, 0)}",
+                            )
+                            if up_file is not None:
+                                if st.button(
+                                    f"✅ 確認匯入至班級 {idx + 1}",
+                                    type="primary",
+                                    use_container_width=True,
+                                    key=f"confirm_import_{s_key}_btn",
+                                ):
+                                    try:
+                                        new_roster = parse_roster_csv_bytes(up_file.getvalue())
+                                        with state["lock"]:
+                                            state["rosters"][s_key]["students"] = new_roster
+                                            state["active_slot"] = s_key
+                                            save_persisted_state(state)
+                                        st.session_state.uploader_reset_ids[s_key] = st.session_state.uploader_reset_ids.get(s_key, 0) + 1
+                                        st.toast(f"🎉 已匯入「{get_slot_display_title(state, s_key)}」並自動切換使用！")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"匯入失敗：{e}")
+
+                            b_c1, b_c2 = st.columns(2)
+                            with b_c1:
+                                if not is_active_slot:
+                                    if st.button("切換使用", key=f"use_{s_key}_btn", use_container_width=True):
+                                        with state["lock"]:
+                                            state["active_slot"] = s_key
+                                            save_persisted_state(state)
+                                        st.rerun()
+                                else:
+                                    st.button("使用中", key=f"using_{s_key}_btn", disabled=True, use_container_width=True)
+                            with b_c2:
+                                has_data = len(state["rosters"][s_key].get("students", {})) > 0
+                                if st.button("清除名單", key=f"clear_{s_key}_btn", disabled=not has_data, use_container_width=True):
+                                    with state["lock"]:
+                                        state["rosters"][s_key]["students"] = {}
+                                        save_persisted_state(state)
+                                    st.toast(f"已清除班級 {idx + 1} 名單")
+                                    st.rerun()
 
         # 2. 渲染 8 列 × 8 欄座次表（第 8 排在最上方，第 1 排 01~08 在最下方靠近講台）
         if st.session_state.seating_click_mode == "add":
@@ -1275,7 +1380,7 @@ if st.session_state.view_mode == "admin":
                             prefix = '<span style="font-size:0.8rem; font-weight:800; color:#6366f1;">座號</span>'
 
                         bg_style = "background:#fffbeb; border-color:#fcd34d;" if (sc > 0 and unique_desc_scores and sc == unique_desc_scores[0]) else "background:#f8fafc; border-color:#e2e8f0;"
-                        stu_name_tag = state.get("roster", {}).get(seat, {}).get("name", "")
+                        stu_name_tag = get_active_roster(state).get(seat, {}).get("name", "")
                         display_seat_label = f"{seat} 號 {stu_name_tag}".strip()
                         rows_html.append(
                             f'<div style="display:flex; align-items:center; justify-content:space-between; {bg_style} border:1.5px solid; border-radius:12px; padding:7px 12px; margin-top:6px;">'
@@ -1294,7 +1399,7 @@ if st.session_state.view_mode == "admin":
                         state["scores"],
                         state["picked_history"],
                         sort_mode=st.session_state.scoreboard_sort,
-                        roster_dict=state.get("roster", {}),
+                        roster_dict=get_active_roster(state),
                     )
                     today_str = datetime.now().strftime("%Y%m%d")
                     safe_title = "".join(c for c in state["course_title"] if c.isalnum() or c in ("_", "-")) or "課堂成績"
