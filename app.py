@@ -221,6 +221,8 @@ if "scoreboard_sort" not in st.session_state:
     st.session_state.scoreboard_sort = "score"  # "score" 或 "seat"
 if "history_sort" not in st.session_state:
     st.session_state.history_sort = "count"  # "count" 或 "seat"
+if "confirm_new_class" not in st.session_state:
+    st.session_state.confirm_new_class = False
 if "round_points_input" not in st.session_state:
     st.session_state.round_points_input = int(state.get("round_points", 1))
 if "auto_award_input" not in st.session_state:
@@ -248,6 +250,20 @@ def clear_all_scoreboard_records():
         state["last_winners"] = []
     st.session_state["confirm_clear_scores_chk"] = False
     st.session_state["scores_cleared_toast"] = True
+
+
+def reset_entire_classroom():
+    """開啟新課堂：一鍵將所有狀態全部重置回到原始狀態"""
+    with state["lock"]:
+        state["round_id"] = 1
+        state["is_open"] = True
+        state["candidates"] = {}
+        state["picked_history"] = {}
+        state["last_winners"] = []
+        state["scores"] = {}
+        state["awarded_winners"] = []
+    st.session_state.confirm_new_class = False
+    st.session_state["new_class_toast"] = True
 
 
 def normalize_seat_num(raw_text: str) -> str:
@@ -477,7 +493,7 @@ if st.session_state.view_mode == "admin":
         st.stop()
 
     # --- 頂部課程標題與開題控制列（加寬題次與重置題次按鈕，確保清晰可見） ---
-    top_c1, top_c2, top_c2_reset, top_c3, top_c4 = st.columns([3.3, 1.4, 1.3, 2.0, 2.0])
+    top_c1, top_c2, top_c2_reset, top_c3, top_c4, top_c5 = st.columns([2.8, 1.2, 1.2, 1.8, 1.8, 1.4])
     with top_c1:
         new_title = st.text_input(
             "課程名稱",
@@ -495,7 +511,7 @@ if st.session_state.view_mode == "admin":
         )
 
     with top_c2_reset:
-        if st.button("🔄 題次歸 1", use_container_width=True, help="將題次重置回到第 1 題，並清空當前名單"):
+        if st.button("🔄 題次歸 1", use_container_width=True, help="僅將題次重置回到第 1 題並清空當前名單（保留記分板與發言次數）"):
             with state["lock"]:
                 state["round_id"] = 1
                 state["is_open"] = True
@@ -523,6 +539,29 @@ if st.session_state.view_mode == "admin":
             st.toast(f"✨ 已開啟第 {state['round_id']} 題！")
             st.rerun()
 
+    with top_c5:
+        if st.button("🏫 開啟新課堂", use_container_width=True, help="全部重置回到原始狀態（題次歸 1、清空名單、記分板與發言紀錄全部歸零）"):
+            st.session_state.confirm_new_class = True
+            st.rerun()
+
+    # 開啟新課堂防誤按確認橫幅
+    if st.session_state.confirm_new_class:
+        with st.container(border=True):
+            warn_c1, warn_c2, warn_c3 = st.columns([6.4, 1.8, 1.8])
+            with warn_c1:
+                st.warning("⚠️ 確定要**開啟新課堂**嗎？這將會把**題次歸 1、舉手名單、記分板分數與已發言紀錄全部清空**回到原始狀態！")
+            with warn_c2:
+                st.button(
+                    "✅ 確定全部重置",
+                    type="primary",
+                    use_container_width=True,
+                    on_click=reset_entire_classroom,
+                )
+            with warn_c3:
+                if st.button("❌ 取消", use_container_width=True):
+                    st.session_state.confirm_new_class = False
+                    st.rerun()
+
     # 若剛抽完籤，播放一次勝利和弦音效
     if st.session_state.play_fanfare_once:
         play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
@@ -530,6 +569,9 @@ if st.session_state.view_mode == "admin":
 
     if st.session_state.pop("scores_cleared_toast", False):
         st.toast("🗑️ 已刪除全部課堂記分板紀錄！")
+
+    if st.session_state.pop("new_class_toast", False):
+        st.toast("🏫 已開啟新課堂，所有紀錄已全部重置回到原始狀態！")
 
     # --- 主畫面雙欄佈局：左 8 欄 / 右 4 欄 ---
     left_col, right_col = st.columns([8, 4], gap="large")
