@@ -24,9 +24,9 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* 縮小頂部預設留白 */
+    /* 保留足夠頂部安全距離，避免最上方「學生端 / 老師端」按鈕被頂部工具列遮擋 */
     .block-container {
-        padding-top: 1.2rem !important;
+        padding-top: 3.2rem !important;
         padding-bottom: 2rem !important;
         max-width: 1400px;
     }
