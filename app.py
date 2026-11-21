@@ -793,8 +793,9 @@ if st.session_state.view_mode == "admin":
     if st.session_state.pop("new_class_toast", False):
         st.toast("🏫 已開啟新課堂，所有紀錄已全部重置回到原始狀態！")
 
-    if st.session_state.pop("seating_toast_msg", None):
-        st.toast(st.session_state.pop("seating_toast_msg", ""))
+    seating_toast_msg = st.session_state.pop("seating_toast_msg", None)
+    if seating_toast_msg:
+        st.toast(seating_toast_msg)
 
     # ========================================================
     # 分頁 B：🗺️ 全班座次表互動記分 (8 列 × 8 欄，由下往上排列)
