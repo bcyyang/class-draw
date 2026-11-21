@@ -223,6 +223,28 @@ st.markdown(
         min-height: 112px;
         display: flex;
         flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 4px;
+    }
+    .podium-banner {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        color: #f8fafc;
+        text-align: center;
+        font-size: 1.15rem;
+        font-weight: 900;
+        letter-spacing: 0.35em;
+        padding: 12px 24px;
+        border-radius: 16px;
+        margin: 14px auto 4px auto;
+        max-width: 480px;
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # 允許雙指自由縮放與上下捲動到底（連點雙擊縮放已由上方 touch-action: manipulation 防護），並注入手機桌面捷徑專屬圖示
 components.html(
     f"""
