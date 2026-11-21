@@ -909,10 +909,10 @@ if st.session_state.view_mode == "admin":
                         score_badge_bg = "#d97706" if cur_score > 0 else "#64748b"
                         st.markdown(
                             f'<div class="{card_cls}">'
-                            f'<div style="font-size:0.72rem; font-weight:700; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{cls_label}</div>'
-                            f'<div style="font-size:1.35rem; font-weight:900; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
-                            f'<div style="font-size:0.95rem; font-weight:800; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{name_label}</div>'
-                            f'<div style="margin-top:4px;"><span style="background:{score_badge_bg}; color:#ffffff; font-size:0.75rem; font-weight:900; padding:1px 8px; border-radius:999px;">⭐ {cur_score} 分</span></div>'
+                            f'<div style="font-size:0.74rem; font-weight:400; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{cls_label}</div>'
+                            f'<div style="font-size:1.3rem; font-weight:500; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
+                            f'<div style="font-size:0.98rem; font-weight:500; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{name_label}</div>'
+                            f'<div style="margin-top:6px;"><span style="background:{score_badge_bg}; color:#ffffff; font-size:0.95rem; font-weight:800; padding:3px 12px; border-radius:999px; display:inline-block;">⭐ {cur_score} 分</span></div>'
                             f'</div>',
                             unsafe_allow_html=True,
                         )
@@ -931,15 +931,15 @@ if st.session_state.view_mode == "admin":
                         if cur_score > 0:
                             st.markdown(
                                 f'<div class="{card_cls}">'
-                                f'<div style="font-size:0.72rem; color:#64748b;">空位 / 未建檔</div>'
-                                f'<div style="font-size:1.35rem; font-weight:900; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
-                                f'<div style="margin-top:4px;"><span style="background:#d97706; color:#ffffff; font-size:0.75rem; font-weight:900; padding:1px 8px; border-radius:999px;">⭐ {cur_score} 分</span></div>'
+                                f'<div style="font-size:0.72rem; font-weight:400; color:#64748b;">空位 / 未建檔</div>'
+                                f'<div style="font-size:1.3rem; font-weight:500; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
+                                f'<div style="margin-top:6px;"><span style="background:#d97706; color:#ffffff; font-size:0.95rem; font-weight:800; padding:3px 12px; border-radius:999px; display:inline-block;">⭐ {cur_score} 分</span></div>'
                                 f'</div>',
                                 unsafe_allow_html=True,
                             )
                         else:
                             st.markdown(
-                                f'<div class="seat-card-empty"><div style="font-size:1.15rem; font-weight:900; color:#94a3b8;">{seat_str}</div><div>空位</div></div>',
+                                f'<div class="seat-card-empty"><div style="font-size:1.15rem; font-weight:500; color:#94a3b8;">{seat_str}</div><div>空位</div></div>',
                                 unsafe_allow_html=True,
                             )
                         btn_text = f"➕ {seat_str}" if is_add_mode else f"➖ {seat_str}"
