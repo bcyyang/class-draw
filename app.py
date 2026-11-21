@@ -174,6 +174,7 @@ def get_shared_classroom_state():
         "scores": {},          # { "05": 4, "18": 2 } 累計總分
         "round_points": 1,     # 本題預設配分
         "awarded_winners": [], # 本輪已給過分的座號，防止重複誤按
+        "auto_award": True,    # 抽中時是否直接自動給分
     }
 
 state = get_shared_classroom_state()
@@ -184,6 +185,8 @@ if "round_points" not in state:
     state["round_points"] = 1
 if "awarded_winners" not in state:
     state["awarded_winners"] = []
+if "auto_award" not in state:
+    state["auto_award"] = True
 
 DEFAULT_PIN = "1234"
 
@@ -216,6 +219,8 @@ if "scoreboard_sort" not in st.session_state:
     st.session_state.scoreboard_sort = "score"  # "score" 或 "seat"
 if "round_points_input" not in st.session_state:
     st.session_state.round_points_input = int(state.get("round_points", 1))
+if "auto_award_input" not in st.session_state:
+    st.session_state.auto_award_input = bool(state.get("auto_award", True))
 
 
 def sync_round_points_from_widget():
@@ -224,12 +229,10 @@ def sync_round_points_from_widget():
         state["round_points"] = int(st.session_state.round_points_input)
 
 
-# ==========================================
-# 4. 核心工具函式（加權抽籤、QR Code、Web Audio 音效）
-# ==========================================
-def normalize_seat_num(raw_text: str) -> str:
-    """標準化座號：若為 1~9 的單一數字（如 '5'），自動補零成為 '05'"""
-    clean = raw_text.strip().upper()
+def sync_auto_award_from_widget():
+    """同步自動給分開關狀態"""
+    with state["lock"]:
+        state["auto_award"] = bool(st.session_state.auto_award_input)
     if clean.isdigit() and len(clean) == 1:
         return clean.zfill(2)
     return clean
@@ -523,31 +526,31 @@ if st.session_state.view_mode == "admin":
                                             state["awarded_winners"].append(w)
                                 play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
                                 st.toast(f"⭐ 已為 {', '.join(un_awarded)} 號加上 {pts_now} 分！")
-                                st.rerun(scope="app")
+                                st.rerun()
                         else:
                             st.success("✅ 本輪中籤同學皆已完成給分")
 
                     with g_c2:
-                        st.caption("個別給分（若只有部分同學答對，可單獨點按座號加分）：")
+                        st.caption("個別給分 / 扣回（可針對單一座號調整本題得分）：")
                         w_cols = st.columns(min(len(current_winners), 5))
                         for idx, w_num in enumerate(current_winners):
                             is_done = w_num in awarded_now
-                            btn_label = f"✅ {w_num}號 (已+{pts_now})" if is_done else f"➕ {w_num}號 (+{pts_now}分)"
+                            btn_label = f"↩️ {w_num}號 (-{pts_now}分)" if is_done else f"➕ {w_num}號 (+{pts_now}分)"
                             with w_cols[idx % 5]:
                                 if st.button(
                                     btn_label,
-                                    key=f"award_single_{w_num}_{idx}",
+                                    key=f"award_toggle_{w_num}_{idx}",
                                     use_container_width=True,
-                                    disabled=is_done,
                                 ):
                                     with state["lock"]:
-                                        state["scores"][w_num] = state["scores"].get(w_num, 0) + pts_now
-                                        if w_num not in state["awarded_winners"]:
+                                        if is_done:
+                                            state["scores"][w_num] = max(0, state["scores"].get(w_num, 0) - pts_now)
+                                            state["awarded_winners"] = [x for x in state["awarded_winners"] if x != w_num]
+                                        else:
+                                            state["scores"][w_num] = state["scores"].get(w_num, 0) + pts_now
                                             state["awarded_winners"].append(w_num)
                                     play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
-                                    st.toast(f"⭐ {w_num} 號獲得 {pts_now} 分！")
-                                    st.rerun(scope="app")
-
+                                    st.rerun()
             with st.container(border=True):
                 candidates = state["candidates"]
                 history = state["picked_history"]
@@ -661,6 +664,13 @@ if st.session_state.view_mode == "admin":
                 )
 
             st.toggle(
+                "⚡ 抽中時自動加上本題配分",
+                key="auto_award_input",
+                on_change=sync_auto_award_from_widget,
+                help="開啟後，抽出中籤同學時會立刻將本題配分加入記分板；若答錯可於左側點按扣回",
+            )
+
+            st.toggle(
                 "🔊 啟用抽籤跳號與中獎音效",
                 key="sound_enabled",
             )
@@ -677,7 +687,8 @@ if st.session_state.view_mode == "admin":
                         weighted=(st.session_state.draw_mode == "weighted"),
                     )
                     pool_nums = list(current_candidates.keys())
-                    pts_val = state.get("round_points", 1)
+                    pts_val = int(st.session_state.round_points_input)
+                    auto_give = bool(st.session_state.auto_award_input)
 
                     play_sound_effect("rolling", enabled=st.session_state.sound_enabled)
 
@@ -695,12 +706,16 @@ if st.session_state.view_mode == "admin":
                         time.sleep(0.085)
 
                     with state["lock"]:
+                        state["round_points"] = pts_val
                         for w in winners:
                             state["candidates"].pop(w, None)
                             state["picked_history"][w] = state["picked_history"].get(w, 0) + 1
-                            state["scores"].setdefault(w, 0)
+                            if auto_give:
+                                state["scores"][w] = state["scores"].get(w, 0) + pts_val
+                            else:
+                                state["scores"].setdefault(w, 0)
                         state["last_winners"] = winners
-                        state["awarded_winners"] = []
+                        state["awarded_winners"] = list(winners) if auto_give else []
 
                     st.session_state.play_fanfare_once = True
                     st.rerun()
@@ -717,17 +732,6 @@ if st.session_state.view_mode == "admin":
                             state["scores"] = {}
                             state["awarded_winners"] = []
                         st.toast("🧹 已清空全班記分板分數！")
-                        st.rerun(scope="app")
-
-                sort_c1, sort_c2 = st.columns(2)
-                with sort_c1:
-                    if st.button(
-                        "🥇 依得分排名",
-                        use_container_width=True,
-                        type="primary" if st.session_state.scoreboard_sort == "score" else "secondary",
-                        key="sort_by_score_btn",
-                    ):
-                        st.session_state.scoreboard_sort = "score"
                         st.rerun()
                 with sort_c2:
                     if st.button(
@@ -804,7 +808,7 @@ if st.session_state.view_mode == "admin":
                                     new_val = max(0, state["scores"].get(clean_s, 0) + int(adj_delta))
                                     state["scores"][clean_s] = new_val
                                 st.toast(f"已調整 {clean_s} 號分數（目前 {new_val} 分）")
-                                st.rerun(scope="app")
+                                st.rerun()
 
         live_admin_scoreboard_card()
 
@@ -819,7 +823,7 @@ if st.session_state.view_mode == "admin":
                         with state["lock"]:
                             state["picked_history"] = {}
                         st.toast("已清空本堂課已發言紀錄，所有人恢復 3x 優先加權！")
-                        st.rerun(scope="app")
+                        st.rerun()
 
                 st.caption("作為「未曾抽中者 3x 加權」的依據；下課或換班時可點右上角重置。")
 
