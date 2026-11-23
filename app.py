@@ -716,7 +716,7 @@ def settle_today_scores_to_roster(date_label: str, reset_today: bool = True):
 
 
 def build_semester_gradebook_csv(slot_obj: dict, include_today_preview: bool = False, today_scores: dict = None) -> bytes:
-    """產生完整班級多週累計成績總表 CSV（班級, 座號, 姓名, 學期總加分, 日期1, 日期2...）"""
+    """產生完整班級多週累計成績總表 CSV（完整保留 01~最大座號 的連續空位行列，方便直接複製貼上對齊正式成績表）"""
     ensure_slot_schema(slot_obj)
     students = slot_obj.get("students", {})
     date_cols = list(slot_obj.get("date_columns", []))
@@ -726,25 +726,42 @@ def build_semester_gradebook_csv(slot_obj: dict, include_today_preview: bool = F
     if include_today_preview:
         header.append("今日未結算暫存")
 
-    sorted_seats = sorted(students.keys(), key=lambda s: (int(s) if s.isdigit() else 9999, s))
+    # 找出所有數字座號（含名單內與今日暫存），建立從 01 到最大座號（至少 64 號或名單上限）的完整連續座號序列
+    numeric_seats = [int(s) for s in (set(students.keys()) | set(today_map.keys())) if str(s).isdigit()]
+    max_seat = max(numeric_seats) if numeric_seats else 64
+    # 若名單最高座號在 64 以內且班級為 64 格座次表，預設補齊到 64 號（若超過 64 號則依實際最大座號）
+    target_max = max(64, max_seat) if max_seat <= 64 else max_seat
+    continuous_seats = [f"{i:02d}" for i in range(1, target_max + 1)]
+
+    # 若有非純數字的特殊座號，也附加在最後面
+    non_numeric_seats = sorted([s for s in students.keys() if not str(s).isdigit()])
+    all_ordered_seats = continuous_seats + non_numeric_seats
+
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(header)
 
-    for seat in sorted_seats:
-        info = students[seat]
-        records = info.get("records", {})
-        sem_total = sum(int(v) for v in records.values())
-        row = [
-            info.get("class_name", ""),
-            seat,
-            info.get("name", ""),
-            sem_total,
-        ]
-        for d_col in date_cols:
-            row.append(int(records.get(d_col, 0)))
-        if include_today_preview:
-            row.append(int(today_map.get(seat, 0)))
+    for seat in all_ordered_seats:
+        info = students.get(seat)
+        if info:
+            records = info.get("records", {})
+            sem_total = sum(int(v) for v in records.values())
+            row = [
+                info.get("class_name", ""),
+                seat,
+                info.get("name", ""),
+                sem_total,
+            ]
+            for d_col in date_cols:
+                row.append(int(records.get(d_col, 0)))
+            if include_today_preview:
+                row.append(int(today_map.get(seat, 0)))
+        else:
+            # 空位保留完整空行列（僅保留座號，其餘欄位留空，方便整欄複製貼上對齊正式成績表）
+            row = ["", seat, "", ""] + ["" for _ in date_cols]
+            if include_today_preview:
+                today_val = int(today_map.get(seat, 0))
+                row.append(today_val if today_val > 0 else "")
         writer.writerow(row)
 
     return output.getvalue().encode("utf-8-sig")
@@ -1587,7 +1604,6 @@ if st.session_state.view_mode == "admin":
                         if stu_info:
                             cls_label = stu_info.get("class_name", "") or "　"
                             name_label = stu_info.get("name", "") or "未命名"
-                            sem_total = int(stu_info.get("semester_total", 0))
                             card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-box"
                             score_badge_bg = "#d97706" if cur_score > 0 else "#64748b"
                             st.markdown(
@@ -1596,7 +1612,6 @@ if st.session_state.view_mode == "admin":
                                 f'<div style="font-size:1.25rem; font-weight:500; color:#0f172a; line-height:1.12; margin:1px 0;">{seat_str}</div>'
                                 f'<div style="font-size:0.96rem; font-weight:500; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{name_label}</div>'
                                 f'<div style="margin-top:5px;"><span style="background:{score_badge_bg}; color:#ffffff; font-size:0.88rem; font-weight:800; padding:2px 10px; border-radius:999px; display:inline-block;">今日 {cur_score} 分</span></div>'
-                                f'<div style="font-size:0.72rem; font-weight:700; color:#059669; margin-top:3px;">學期累計 {sem_total} 分</div>'
                                 f'</div>',
                                 unsafe_allow_html=True,
                             )
