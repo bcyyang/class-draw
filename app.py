@@ -336,9 +336,35 @@ components.html(
                         const t = i / sampleRate;
                         const env = Math.exp(-t * decay);
                         const pitchCurve = isSub ? baseFreq * (1 + t * 9) : baseFreq * (1 - t * 6);
-                        const body = Math.sin(2 * Math.PI * Math.max(150, pitchCurve) * t);
-                        const clickNoise = nextRand();
-                        const sample = (body * (1 - noiseMix) + clickNoise * noiseMix) * env * 0.95;
+                // 產生最單純乾淨的純弦波單音 WAV（加分：1000Hz 清脆嗶一聲 / 減分：520Hz 低沉嘟一聲）
+                const buildPureBeepWavUrl = (freq) => {{
+                    const sampleRate = 44100;
+                    const durationSec = 0.075;
+                    const totalSamples = Math.floor(sampleRate * durationSec);
+                    const buffer = new ArrayBuffer(44 + totalSamples * 2);
+                    const view = new DataView(buffer);
+                    const writeStr = (offset, str) => {{
+                        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+                    }};
+                    writeStr(0, 'RIFF');
+                    view.setUint32(4, 36 + totalSamples * 2, true);
+                    writeStr(8, 'WAVE');
+                    writeStr(12, 'fmt ');
+                    view.setUint32(16, 16, true);
+                    view.setUint16(20, 1, true);
+                    view.setUint16(22, 1, true);
+                    view.setUint32(24, sampleRate, true);
+                    view.setUint32(28, sampleRate * 2, true);
+                    view.setUint16(32, 2, true);
+                    view.setUint16(34, 16, true);
+                    writeStr(36, 'data');
+                    view.setUint32(40, totalSamples * 2, true);
+
+                    for (let i = 0; i < totalSamples; i++) {{
+                        const t = i / sampleRate;
+                        const fadeIn = Math.min(1, t / 0.006);
+                        const fadeOut = Math.min(1, (durationSec - t) / 0.015);
+                        const sample = Math.sin(2 * Math.PI * freq * t) * fadeIn * fadeOut * 0.65;
                         view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, sample)) * 32767, true);
                     }}
                     const bytes = new Uint8Array(buffer);
@@ -347,8 +373,8 @@ components.html(
                     return 'data:audio/wav;base64,' + win.btoa(bin);
                 }};
 
-                const addWavUrl = buildKeyTapWavUrl(false);
-                const subWavUrl = buildKeyTapWavUrl(true);
+                const addWavUrl = buildPureBeepWavUrl(1000);
+                const subWavUrl = buildPureBeepWavUrl(520);
 
                 let lastPlayTs = 0;
                 const triggerClickFeedback = (kind) => {{
@@ -358,45 +384,19 @@ components.html(
 
                     unlockAudioCtx();
 
-                    // 1. Android 清晰雙脈衝震動回饋
+                    // 1. Android 清晰震動回饋
                     try {{
                         if (win.navigator && typeof win.navigator.vibrate === 'function') {{
-                            win.navigator.vibrate(kind === 'add' ? [75] : [60, 40, 80]);
+                            win.navigator.vibrate(kind === 'add' ? [65] : [50, 40, 65]);
                         }}
                     }} catch (err) {{}}
 
-                    // 2. HTML5 Audio 播放（走 Android 媒體音量通道，每次新建實例避免連點被吞音）
+                    // 2. HTML5 Audio 播放純淨單音
                     try {{
                         const audioEl = new win.Audio(kind === 'add' ? addWavUrl : subWavUrl);
                         audioEl.volume = 1.0;
                         const p = audioEl.play();
                         if (p && typeof p.catch === 'function') p.catch(() => {{}});
-                    }} catch (err) {{}}
-
-                    // 3. Web Audio API 緩衝區同步補音（加分：柔和咔嗒 / 減分：輕巧水滴）
-                    try {{
-                        if (sharedCtx) {{
-                            const dur = kind === 'add' ? 0.065 : 0.085;
-                            const sr = sharedCtx.sampleRate;
-                            const len = Math.floor(sr * dur);
-                            const buf = sharedCtx.createBuffer(1, len, sr);
-                            const ch = buf.getChannelData(0);
-                            const f0 = kind === 'add' ? 920 : 560;
-                            const dec = kind === 'add' ? 75 : 45;
-                            const nMix = kind === 'add' ? 0.55 : 0.12;
-                            for (let i = 0; i < len; i++) {{
-                                const t = i / sr;
-                                const env = Math.exp(-t * dec);
-                                const freq = kind === 'add' ? f0 * (1 - t * 6) : f0 * (1 + t * 9);
-                                const tone = Math.sin(2 * Math.PI * Math.max(150, freq) * t);
-                                const ns = Math.random() * 2 - 1;
-                                ch[i] = (tone * (1 - nMix) + ns * nMix) * env * 0.65;
-                            }}
-                            const src = sharedCtx.createBufferSource();
-                            src.buffer = buf;
-                            src.connect(sharedCtx.destination);
-                            src.start();
-                        }}
                     }} catch (err) {{}}
                 }};
 
@@ -932,13 +932,9 @@ def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
 
 
 def play_seating_click_feedback(kind="add"):
-    """播放簡短清脆按鍵音效（加分：柔和咔嗒 / 減分：輕巧水滴）並觸發手機短震動回饋"""
-    is_sub = (kind == "sub")
-    dur = 0.085 if is_sub else 0.065
-    f0 = 560 if is_sub else 920
-    dec = 45 if is_sub else 75
-    n_mix = 0.12 if is_sub else 0.55
-    vib_ms = 60 if is_sub else 45
+    """播放最單純乾淨的純弦波單音（加分 1000Hz / 減分 520Hz）並觸發手機短震動回饋"""
+    freq = 520 if kind == "sub" else 1000
+    vib_ms = 60 if kind == "sub" else 45
     js_code = f"""
     <script>
     (function() {{
@@ -950,22 +946,18 @@ def play_seating_click_feedback(kind="add"):
         try {{
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             const ctx = new AudioCtx();
-            const sr = ctx.sampleRate;
-            const len = Math.floor(sr * {dur});
-            const buf = ctx.createBuffer(1, len, sr);
-            const ch = buf.getChannelData(0);
-            for (let i = 0; i < len; i++) {{
-                const t = i / sr;
-                const env = Math.exp(-t * {dec});
-                const freq = {"f0 * (1 + t * 9)" if is_sub else "f0 * (1 - t * 6)"};
-                const tone = Math.sin(2 * Math.PI * Math.max(150, freq) * t);
-                const ns = Math.random() * 2 - 1;
-                ch[i] = (tone * (1 - {n_mix}) + ns * {n_mix}) * env * 0.7;
-            }}
-            const src = ctx.createBufferSource();
-            src.buffer = buf;
-            src.connect(ctx.destination);
-            src.start();
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime({freq}, now);
+            gain.gain.setValueAtTime(0.001, now);
+            gain.gain.linearRampToValueAtTime(0.35, now + 0.008);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.075);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.08);
         }} catch (e) {{}}
     }})();
     </script>
