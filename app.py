@@ -300,8 +300,8 @@ components.html(
 
                 // 產生手機打字鍵盤敲擊聲 WAV（加分：柔和咔嗒 / 減分：輕巧水滴）
                 const buildKeyTapWavUrl = (isSub) => {{
-                    const sampleRate = 22050;
-                    const durationSec = isSub ? 0.032 : 0.022;
+                    const sampleRate = 44100;
+                    const durationSec = isSub ? 0.085 : 0.065;
                     const totalSamples = Math.floor(sampleRate * durationSec);
                     const buffer = new ArrayBuffer(44 + totalSamples * 2);
                     const view = new DataView(buffer);
@@ -322,10 +322,10 @@ components.html(
                     writeStr(36, 'data');
                     view.setUint32(40, totalSamples * 2, true);
 
-                    // 加分：柔和咔嗒 (920Hz, 雜訊比 0.65) / 減分：輕巧水滴 (680Hz, 雜訊比 0.2)
-                    const baseFreq = isSub ? 680 : 920;
-                    const decay = isSub ? 110 : 165;
-                    const noiseMix = isSub ? 0.2 : 0.65;
+                    // 加分：柔和咔嗒 (920Hz) / 減分：輕巧水滴 (680Hz 上揚水滴音)
+                    const baseFreq = isSub ? 560 : 920;
+                    const decay = isSub ? 45 : 75;
+                    const noiseMix = isSub ? 0.12 : 0.55;
                     let seed = 12345;
                     const nextRand = () => {{
                         seed = (seed * 16807) % 2147483647;
@@ -335,10 +335,10 @@ components.html(
                     for (let i = 0; i < totalSamples; i++) {{
                         const t = i / sampleRate;
                         const env = Math.exp(-t * decay);
-                        const pitchDrop = baseFreq * (1 - t * 18);
-                        const body = Math.sin(2 * Math.PI * Math.max(120, pitchDrop) * t);
+                        const pitchCurve = isSub ? baseFreq * (1 + t * 9) : baseFreq * (1 - t * 6);
+                        const body = Math.sin(2 * Math.PI * Math.max(150, pitchCurve) * t);
                         const clickNoise = nextRand();
-                        const sample = (body * (1 - noiseMix) + clickNoise * noiseMix) * env * 0.9;
+                        const sample = (body * (1 - noiseMix) + clickNoise * noiseMix) * env * 0.95;
                         view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, sample)) * 32767, true);
                     }}
                     const bytes = new Uint8Array(buffer);
@@ -373,21 +373,29 @@ components.html(
                         if (p && typeof p.catch === 'function') p.catch(() => {{}});
                     }} catch (err) {{}}
 
-                    // 3. Web Audio API 同步補音（加分：柔和咔嗒 / 減分：輕巧水滴）
+                    // 3. Web Audio API 緩衝區同步補音（加分：柔和咔嗒 / 減分：輕巧水滴）
                     try {{
                         if (sharedCtx) {{
-                            const osc = sharedCtx.createOscillator();
-                            const gain = sharedCtx.createGain();
-                            const dur = kind === 'add' ? 0.022 : 0.032;
-                            osc.type = 'sine';
-                            osc.frequency.setValueAtTime(kind === 'add' ? 920 : 680, sharedCtx.currentTime);
-                            osc.frequency.exponentialRampToValueAtTime(160, sharedCtx.currentTime + dur);
-                            gain.gain.setValueAtTime(0.28, sharedCtx.currentTime);
-                            gain.gain.exponentialRampToValueAtTime(0.001, sharedCtx.currentTime + dur);
-                            osc.connect(gain);
-                            gain.connect(sharedCtx.destination);
-                            osc.start();
-                            osc.stop(sharedCtx.currentTime + dur);
+                            const dur = kind === 'add' ? 0.065 : 0.085;
+                            const sr = sharedCtx.sampleRate;
+                            const len = Math.floor(sr * dur);
+                            const buf = sharedCtx.createBuffer(1, len, sr);
+                            const ch = buf.getChannelData(0);
+                            const f0 = kind === 'add' ? 920 : 560;
+                            const dec = kind === 'add' ? 75 : 45;
+                            const nMix = kind === 'add' ? 0.55 : 0.12;
+                            for (let i = 0; i < len; i++) {{
+                                const t = i / sr;
+                                const env = Math.exp(-t * dec);
+                                const freq = kind === 'add' ? f0 * (1 - t * 6) : f0 * (1 + t * 9);
+                                const tone = Math.sin(2 * Math.PI * Math.max(150, freq) * t);
+                                const ns = Math.random() * 2 - 1;
+                                ch[i] = (tone * (1 - nMix) + ns * nMix) * env * 0.65;
+                            }}
+                            const src = sharedCtx.createBufferSource();
+                            src.buffer = buf;
+                            src.connect(sharedCtx.destination);
+                            src.start();
                         }}
                     }} catch (err) {{}}
                 }};
@@ -924,9 +932,13 @@ def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
 
 
 def play_seating_click_feedback(kind="add"):
-    """播放簡短清脆按鍵音效並觸發手機短震動回饋"""
-    freq = 920 if kind == "add" else 680
-    vib_ms = 35 if kind == "add" else 60
+    """播放簡短清脆按鍵音效（加分：柔和咔嗒 / 減分：輕巧水滴）並觸發手機短震動回饋"""
+    is_sub = (kind == "sub")
+    dur = 0.085 if is_sub else 0.065
+    f0 = 560 if is_sub else 920
+    dec = 45 if is_sub else 75
+    n_mix = 0.12 if is_sub else 0.55
+    vib_ms = 60 if is_sub else 45
     js_code = f"""
     <script>
     (function() {{
@@ -938,16 +950,22 @@ def play_seating_click_feedback(kind="add"):
         try {{
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             const ctx = new AudioCtx();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime({freq}, ctx.currentTime);
-            gain.gain.setValueAtTime(0.18, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.032);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.032);
+            const sr = ctx.sampleRate;
+            const len = Math.floor(sr * {dur});
+            const buf = ctx.createBuffer(1, len, sr);
+            const ch = buf.getChannelData(0);
+            for (let i = 0; i < len; i++) {{
+                const t = i / sr;
+                const env = Math.exp(-t * {dec});
+                const freq = {"f0 * (1 + t * 9)" if is_sub else "f0 * (1 - t * 6)"};
+                const tone = Math.sin(2 * Math.PI * Math.max(150, freq) * t);
+                const ns = Math.random() * 2 - 1;
+                ch[i] = (tone * (1 - {n_mix}) + ns * {n_mix}) * env * 0.7;
+            }}
+            const src = ctx.createBufferSource();
+            src.buffer = buf;
+            src.connect(ctx.destination);
+            src.start();
         }} catch (e) {{}}
     }})();
     </script>
