@@ -221,10 +221,10 @@ st.markdown(
         font-weight: 700;
         min-height: 112px;
         display: flex;
-    /* 座次表專屬樣式（整張座位方格直接作為可點擊按鈕） */
-    div[data-testid="stButton"] button[kind="secondary"].seat-grid-btn,
-    div[data-testid="stButton"] button[kind="primary"].seat-grid-btn {
-        touch-action: manipulation !important;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 4px;
     }
     .podium-banner {
         background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
@@ -448,10 +448,6 @@ if "sound_enabled" not in st.session_state:
     st.session_state.sound_enabled = True
 if "student_saved_num" not in st.session_state:
     st.session_state.student_saved_num = ""
-if "student_last_known_score" not in st.session_state:
-    st.session_state.student_last_known_score = None
-if "student_score_gain_banner" not in st.session_state:
-    st.session_state.student_score_gain_banner = None
 if "submitted_round" not in st.session_state:
     st.session_state.submitted_round = 0
 if "play_fanfare_once" not in st.session_state:
@@ -1305,35 +1301,6 @@ if st.session_state.view_mode == "admin":
             is_add_mode = st.session_state.seating_click_mode == "add"
             action_delta = 1 if is_add_mode else -1
 
-            # 注入座次表整格大按鈕樣式（讓方格內多行文字清晰排布、有得分自動高亮）
-            st.markdown(
-                """
-                <style>
-                div[data-testid="stHorizontalBlock"] div[data-testid="stButton"] > button {
-                    min-height: 108px !important;
-                    height: auto !important;
-                    padding: 8px 4px !important;
-                    border-radius: 14px !important;
-                    white-space: pre-line !important;
-                    line-height: 1.32 !important;
-                    display: flex !important;
-                    flex-direction: column !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05) !important;
-                }
-                div[data-testid="stHorizontalBlock"] div[data-testid="stButton"] > button p {
-                    font-size: 0.92rem !important;
-                    font-weight: 700 !important;
-                    margin: 0 !important;
-                    white-space: pre-line !important;
-                    text-align: center !important;
-                }
-                </style>
-                """,
-                unsafe_allow_html=True,
-            )
-
             for row_idx in range(7, -1, -1):
                 row_cols = st.columns(8, gap="small")
                 for col_idx in range(8):
@@ -1344,28 +1311,49 @@ if st.session_state.view_mode == "admin":
 
                     with row_cols[col_idx]:
                         if stu_info:
-                            cls_label = stu_info.get("class_name", "") or "—"
+                            cls_label = stu_info.get("class_name", "") or "　"
                             name_label = stu_info.get("name", "") or "未命名"
-                            score_line = f"⭐ {cur_score} 分" if cur_score > 0 else "0 分"
-                            card_label = f"{cls_label}\n{seat_str}  {name_label}\n{score_line}"
+                            card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-box"
+                            score_badge_bg = "#d97706" if cur_score > 0 else "#64748b"
+                            st.markdown(
+                                f'<div class="{card_cls}">'
+                                f'<div style="font-size:0.74rem; font-weight:400; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{cls_label}</div>'
+                                f'<div style="font-size:1.3rem; font-weight:500; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
+                                f'<div style="font-size:0.98rem; font-weight:500; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{name_label}</div>'
+                                f'<div style="margin-top:6px;"><span style="background:{score_badge_bg}; color:#ffffff; font-size:0.95rem; font-weight:800; padding:3px 12px; border-radius:999px; display:inline-block;">⭐ {cur_score} 分</span></div>'
+                                f'</div>',
+                                unsafe_allow_html=True,
+                            )
+                            btn_text = f"➕ {seat_str} (+1)" if is_add_mode else f"➖ {seat_str} (-1)"
                             st.button(
-                                card_label,
+                                btn_text,
                                 key=f"seat_click_{seat_str}",
                                 use_container_width=True,
-                                type="primary" if cur_score > 0 else "secondary",
+                                type="primary" if (is_add_mode and cur_score > 0) else "secondary",
                                 on_click=adjust_seat_score,
                                 args=(seat_str, action_delta, True),
                             )
                         else:
+                            card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-empty"
                             if cur_score > 0:
-                                empty_label = f"空位\n{seat_str}\n⭐ {cur_score} 分"
+                                st.markdown(
+                                    f'<div class="{card_cls}">'
+                                    f'<div style="font-size:0.72rem; font-weight:400; color:#64748b;">空位 / 未建檔</div>'
+                                    f'<div style="font-size:1.3rem; font-weight:500; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
+                                    f'<div style="margin-top:6px;"><span style="background:#d97706; color:#ffffff; font-size:0.95rem; font-weight:800; padding:3px 12px; border-radius:999px; display:inline-block;">⭐ {cur_score} 分</span></div>'
+                                    f'</div>',
+                                    unsafe_allow_html=True,
+                                )
                             else:
-                                empty_label = f"{seat_str}\n（空位）"
+                                st.markdown(
+                                    f'<div class="seat-card-empty"><div style="font-size:1.15rem; font-weight:500; color:#94a3b8;">{seat_str}</div><div>空位</div></div>',
+                                    unsafe_allow_html=True,
+                                )
+                            btn_text = f"➕ {seat_str}" if is_add_mode else f"➖ {seat_str}"
                             st.button(
-                                empty_label,
+                                btn_text,
                                 key=f"seat_empty_click_{seat_str}",
                                 use_container_width=True,
-                                type="primary" if cur_score > 0 else "secondary",
                                 on_click=adjust_seat_score,
                                 args=(seat_str, action_delta, True),
                             )
@@ -1566,28 +1554,16 @@ if st.session_state.view_mode == "admin":
                     help="依題目難度設定本題答對可得幾分",
                 )
 
-            cur_auto_award = bool(state.get("auto_award", True))
-            new_auto_award = st.toggle(
+            st.toggle(
                 "⚡ 抽中時自動加上本題配分",
-                value=cur_auto_award,
+                key="auto_award_input",
+                on_change=sync_auto_award_from_widget,
             )
-            if new_auto_award != cur_auto_award:
-                with state["lock"]:
-                    state["auto_award"] = new_auto_award
-                    save_persisted_state(state)
-                st.session_state.auto_award_input = new_auto_award
-                st.toast("⚡ 已開啟抽中自動給分" if new_auto_award else "⏸️ 已關閉抽中自動給分（改為手動給分）")
-                st.rerun()
 
-            cur_sound_enabled = bool(st.session_state.get("sound_enabled", True))
-            new_sound_enabled = st.toggle(
+            st.toggle(
                 "🔊 啟用抽籤跳號與中獎音效",
-                value=cur_sound_enabled,
+                key="sound_enabled",
             )
-            if new_sound_enabled != cur_sound_enabled:
-                st.session_state.sound_enabled = new_sound_enabled
-                st.toast("🔊 已開啟抽籤音效" if new_sound_enabled else "🔇 已關閉抽籤音效（靜音模式）")
-                st.rerun()
 
             if st.button("🎰 開始公平抽籤", type="primary", use_container_width=True):
                 current_candidates = dict(state["candidates"])
@@ -1602,10 +1578,9 @@ if st.session_state.view_mode == "admin":
                     )
                     pool_nums = list(current_candidates.keys())
                     pts_val = int(st.session_state.round_points_input)
-                    auto_give = bool(state.get("auto_award", True))
-                    sound_on = bool(st.session_state.get("sound_enabled", True))
+                    auto_give = bool(st.session_state.auto_award_input)
 
-                    play_sound_effect("rolling", enabled=sound_on)
+                    play_sound_effect("rolling", enabled=st.session_state.sound_enabled)
 
                     for _ in range(15):
                         fake_sample = [random.choice(pool_nums) for _ in range(len(winners))]
@@ -1633,7 +1608,7 @@ if st.session_state.view_mode == "admin":
                         state["awarded_winners"] = list(winners) if auto_give else []
                         save_persisted_state(state)
 
-                    st.session_state.play_fanfare_once = sound_on
+                    st.session_state.play_fanfare_once = True
                     st.rerun()
 
         @st.fragment(run_every=2)
@@ -1851,7 +1826,6 @@ else:
 
         @st.fragment(run_every=2)
         def student_live_panel():
-            sync_state_from_disk_if_newer(state)
             current_round = state["round_id"]
             is_open = state["is_open"]
             already_submitted = st.session_state.submitted_round == current_round
@@ -1876,55 +1850,12 @@ else:
             with st.container(border=True):
                 last_winners = list(state.get("last_winners", []))
                 saved_num = normalize_seat_num(st.session_state.student_saved_num)
-                my_total_score = int(state.get("scores", {}).get(saved_num, 0)) if saved_num else 0
-                pts_this_round = int(state.get("round_points", 1))
+                my_total_score = state.get("scores", {}).get(saved_num, 0) if saved_num else 0
+                pts_this_round = state.get("round_points", 1)
 
-                # 偵測分數是否剛剛增加（支援「抽籤給分」與「座次表直接點座位加分」，學生手機保持靜音不播放音效）
                 if saved_num:
-                    prev_score = st.session_state.student_last_known_score
-                    if prev_score is None:
-                        st.session_state.student_last_known_score = my_total_score
-                    elif my_total_score > prev_score:
-                        gained = my_total_score - prev_score
-                        st.session_state.student_last_known_score = my_total_score
-                        st.session_state.student_score_gain_banner = {
-                            "gained": gained,
-                            "total": my_total_score,
-                            "ts": time.time(),
-                        }
-                    elif my_total_score < prev_score:
-                        st.session_state.student_last_known_score = my_total_score
-
-                # 1. 常駐醒目顯示「目前累積總分」卡片
-                if saved_num:
-                    stu_name_str = get_active_roster(state).get(saved_num, {}).get("name", "")
-                    who_label = f"{saved_num} 號 {stu_name_str}".strip()
                     st.markdown(
-                        f"""
-                        <div style="background:linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border:2px solid #818cf8; border-radius:16px; padding:12px 16px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between;">
-                            <div>
-                                <div style="font-size:0.78rem; font-weight:800; color:#4f46e5;">👤 目前登入座號</div>
-                                <div style="font-size:1.25rem; font-weight:900; color:#1e1b4b;">{who_label}</div>
-                            </div>
-                            <div style="text-align:right;">
-                                <div style="font-size:0.78rem; font-weight:800; color:#4f46e5;">🏆 本堂課累積總分</div>
-                                <div style="font-size:1.75rem; font-weight:900; color:#312e81; line-height:1.1;">{my_total_score} <span style="font-size:0.95rem;">分</span></div>
-                            </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-                # 2. 剛剛獲得加分時的即時回饋橫幅（顯示 12 秒）
-                gain_info = st.session_state.student_score_gain_banner
-                if gain_info and (time.time() - gain_info["ts"] <= 12):
-                    st.markdown(
-                        f"""
-                        <div style="background:linear-gradient(135deg, #10b981 0%, #059669 100%); color:#ffffff; border-radius:16px; padding:14px 16px; margin-bottom:12px; text-align:center; box-shadow:0 8px 20px rgba(16,185,129,0.35); border:2px solid #a7f3d0;">
-                            <div style="font-size:1.2rem; font-weight:900;">⭐ 剛剛獲得 +{gain_info['gained']} 分！</div>
-                            <div style="font-size:0.9rem; font-weight:700; opacity:0.95; margin-top:3px;">目前累積總分已更新為 {gain_info['total']} 分</div>
-                        </div>
-                        """,
+                        f'<div style="text-align:right; margin-bottom:8px;"><span style="background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; font-size:0.85rem; font-weight:900; padding:4px 12px; border-radius:999px;">🏆 {saved_num} 號目前累積：{my_total_score} 分</span></div>',
                         unsafe_allow_html=True,
                     )
 
@@ -1998,7 +1929,6 @@ else:
                                 state["candidates"][clean_num] = time.time()
                                 save_persisted_state(state)
                             st.session_state.student_saved_num = clean_num
-                            st.session_state.student_last_known_score = int(state.get("scores", {}).get(clean_num, 0))
                             st.session_state.submitted_round = current_round
                             st.rerun()
 
