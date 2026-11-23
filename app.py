@@ -1349,39 +1349,16 @@ if st.session_state.view_mode == "admin":
         cur_slot_key = state.get("active_slot", "slot_1")
         date_cols = slot_obj.get("date_columns", [])
 
-        # 1. 上方操作、今日成績一鍵結算與累計總表下載列
+        # 1. 上方精簡操作列（僅保留點擊說明與復原上一筆）+ 收合式管理面板
         with st.container(border=True):
-            ctrl_c1, ctrl_c2, ctrl_c3, ctrl_c4 = st.columns([3.8, 2.0, 2.2, 2.0])
+            ctrl_c1, ctrl_c2 = st.columns([7.8, 2.2])
             with ctrl_c1:
                 st.markdown(
-                    '<div style="padding-top:4px; font-size:0.92rem; font-weight:700; color:#1e293b;">'
-                    '👆 點擊 <span style="color:#4f46e5;">➕ 加 1 分</span> / <span style="color:#64748b;">➖ 減 1 分</span> · '
-                    f'已累計 <span style="color:#059669;">{len(date_cols)} 堂課</span> 歷史紀錄</div>',
+                    '<div style="padding-top:6px; font-size:0.94rem; font-weight:700; color:#1e293b;">'
+                    '👆 點擊座位下方 <span style="color:#4f46e5;">➕ 加 1 分</span> / <span style="color:#64748b;">➖ 減 1 分</span></div>',
                     unsafe_allow_html=True,
                 )
             with ctrl_c2:
-                st.text_input(
-                    "結算日期欄位名稱",
-                    key="settle_date_label",
-                    label_visibility="collapsed",
-                    placeholder="如 2026/11/23",
-                    help="下課結算時，將今日分數寫入此日期欄位名稱",
-                )
-            with ctrl_c3:
-                if st.button(
-                    "💾 結算今日寫入總表",
-                    type="primary",
-                    use_container_width=True,
-                    key="settle_today_btn",
-                    help="將今日所有同學得分寫入上方日期欄位，自動加總學期總分，並把今日暫存分數歸零",
-                ):
-                    ok, msg = settle_today_scores_to_roster(st.session_state.settle_date_label, reset_today=True)
-                    if ok:
-                        st.toast(msg)
-                        st.rerun()
-                    else:
-                        st.warning(msg)
-            with ctrl_c4:
                 undo_len = len(st.session_state.seating_undo_stack)
                 st.button(
                     f"↩️ 復原 ({undo_len})" if undo_len > 0 else "↩️ 復原上一筆",
@@ -1391,49 +1368,8 @@ if st.session_state.view_mode == "admin":
                     on_click=undo_last_seating_click,
                 )
 
-            # 第二列：下載本班多週累計成績總表 CSV & 預覽歷史累計明細
-            dl_c1, dl_c2, dl_c3 = st.columns([4.6, 2.7, 2.7])
-            with dl_c1:
-                if date_cols:
-                    recent_str = "、".join(date_cols[-4:])
-                    more_str = f" 等共 {len(date_cols)} 次" if len(date_cols) > 4 else ""
-                    st.caption(f"📅 本班已登錄上課日期：{recent_str}{more_str}（下課請按「💾 結算今日寫入總表」再下載總表備份）")
-                else:
-                    st.caption("📅 本班尚未結算任何上課日期；下課時輸入日期並按「💾 結算今日寫入總表」，即可自動建立多週累計總表！")
-            with dl_c2:
-                semester_csv_bytes = build_semester_gradebook_csv(
-                    slot_obj,
-                    include_today_preview=any(v > 0 for v in state["scores"].values()),
-                    today_scores=state["scores"],
-                )
-                today_str = datetime.now().strftime("%Y%m%d")
-                slot_short_name = get_slot_display_title(state, cur_slot_key).split("（")[0].replace("：", "_")
-                st.download_button(
-                    label="📊 下載學期累計總表 (.csv)",
-                    data=semester_csv_bytes,
-                    file_name=f"{slot_short_name}_學期累計成績總表_{today_str}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                    key="seating_download_semester_csv_btn",
-                )
-            with dl_c3:
-                today_csv_bytes, _ = build_scores_csv(
-                    state["scores"],
-                    state["picked_history"],
-                    sort_mode="seat",
-                    roster_dict=roster,
-                )
-                st.download_button(
-                    label="📥 僅下載今日得分明細",
-                    data=today_csv_bytes,
-                    file_name=f"{slot_short_name}_今日得分_{today_str}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                    key="seating_download_today_csv_btn",
-                )
-
-            # 展開區：管理三個班級的 CSV 名單（支援匯入初次名單 或 匯入上週下載的累計總表接續累計）
-            with st.expander("📂 管理三個班級的 CSV 名單（匯入初次名單 / 匯入上週累計總表接續累計）", expanded=False):
+            # 展開區：管理三個班級的 CSV 名單 + 結算今日寫入總表 + 下載成績總表
+            with st.expander("📂 管理三個班級的 CSV 名單、結算今日成績與下載總表", expanded=False):
                 info_c1, info_c2 = st.columns([7.5, 2.5])
                 with info_c1:
                     st.caption("💡 支援兩種 CSV 匯入：① 學期初的「班級、座號、姓名」三欄名單；② 上週下載的「學期累計成績總表 (.csv)」，匯入後會自動還原過去所有日期欄位並繼續往右累加！")
@@ -1517,6 +1453,76 @@ if st.session_state.view_mode == "admin":
                                         state["rosters"][s_key]["date_columns"] = []
                                         save_persisted_state(state)
                                     st.toast(f"已清除班級 {idx + 1} 名單與累計紀錄")
+
+                st.divider()
+
+                # 下方收納：本班歷史堂數、結算今日寫入總表、下載學期累計總表與今日明細
+                st.markdown(
+                    f'<div style="font-size:0.92rem; font-weight:800; color:#1e293b; margin-bottom:8px;">'
+                    f'📊 本班成績結算與下載（已累計 <span style="color:#059669;">{len(date_cols)} 堂課</span> 歷史紀錄）</div>',
+                    unsafe_allow_html=True,
+                )
+                settle_c1, settle_c2, settle_c3, settle_c4 = st.columns([2.2, 2.4, 2.7, 2.7])
+                with settle_c1:
+                    st.text_input(
+                        "結算日期欄位名稱",
+                        key="settle_date_label",
+                        label_visibility="collapsed",
+                        placeholder="如 2026/11/23",
+                        help="下課結算時，將今日分數寫入此日期欄位名稱",
+                    )
+                with settle_c2:
+                    if st.button(
+                        "💾 結算今日寫入總表",
+                        type="primary",
+                        use_container_width=True,
+                        key="settle_today_btn",
+                        help="將今日所有同學得分寫入上方日期欄位，自動加總學期總分，並把今日暫存分數歸零",
+                    ):
+                        ok, msg = settle_today_scores_to_roster(st.session_state.settle_date_label, reset_today=True)
+                        if ok:
+                            st.toast(msg)
+                            st.rerun()
+                        else:
+                            st.warning(msg)
+                with settle_c3:
+                    semester_csv_bytes = build_semester_gradebook_csv(
+                        slot_obj,
+                        include_today_preview=any(v > 0 for v in state["scores"].values()),
+                        today_scores=state["scores"],
+                    )
+                    today_str = datetime.now().strftime("%Y%m%d")
+                    slot_short_name = get_slot_display_title(state, cur_slot_key).split("（")[0].replace("：", "_")
+                    st.download_button(
+                        label="📊 下載學期累計總表 (.csv)",
+                        data=semester_csv_bytes,
+                        file_name=f"{slot_short_name}_學期累計成績總表_{today_str}.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        key="seating_download_semester_csv_btn",
+                    )
+                with settle_c4:
+                    today_csv_bytes, _ = build_scores_csv(
+                        state["scores"],
+                        state["picked_history"],
+                        sort_mode="seat",
+                        roster_dict=roster,
+                    )
+                    st.download_button(
+                        label="📥 僅下載今日得分明細",
+                        data=today_csv_bytes,
+                        file_name=f"{slot_short_name}_今日得分_{today_str}.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        key="seating_download_today_csv_btn",
+                    )
+
+                if date_cols:
+                    recent_str = "、".join(date_cols[-6:])
+                    more_str = f" 等共 {len(date_cols)} 次" if len(date_cols) > 6 else ""
+                    st.caption(f"📅 本班已登錄上課日期：{recent_str}{more_str}")
+                else:
+                    st.caption("📅 本班尚未結算任何上課日期；下課時輸入日期並按「💾 結算今日寫入總表」，即可自動建立多週累計總表！")
 
         # 2. 渲染 8 列 × 8 欄座次表（含 2-2-2-2 走道區隔線、今日暫存分數與學期總加分雙標籤）
         @st.fragment(run_every=2)
