@@ -1,0 +1,851 @@
+{
+  "course_title": "課堂即時搶答抽籤",
+  "admin_pin": "LClc11509",
+  "active_slot": "slot_1",
+  "rosters": {
+    "slot_1": {
+      "label": "班級 1",
+      "students": {
+        "01": {
+          "class_name": "華文一甲",
+          "seat": "01",
+          "name": "莊子萱"
+        },
+        "02": {
+          "class_name": "華文一甲",
+          "seat": "02",
+          "name": "游嘉瑄"
+        },
+        "03": {
+          "class_name": "環安三甲",
+          "seat": "03",
+          "name": "周士凱"
+        },
+        "04": {
+          "class_name": "華文一甲",
+          "seat": "04",
+          "name": "林士桓"
+        },
+        "05": {
+          "class_name": "光電三乙",
+          "seat": "05",
+          "name": "洪嘉均"
+        },
+        "06": {
+          "class_name": "華文一甲",
+          "seat": "06",
+          "name": "陳奕愷"
+        },
+        "07": {
+          "class_name": "華文一甲",
+          "seat": "07",
+          "name": "彭立雅"
+        },
+        "08": {
+          "class_name": "華文一甲",
+          "seat": "08",
+          "name": "林芸函"
+        },
+        "09": {
+          "class_name": "華文一甲",
+          "seat": "09",
+          "name": "余宥姍"
+        },
+        "10": {
+          "class_name": "華文一甲",
+          "seat": "10",
+          "name": "連昭儀"
+        },
+        "11": {
+          "class_name": "華文一甲",
+          "seat": "11",
+          "name": "莊佾恩"
+        },
+        "12": {
+          "class_name": "華文一甲",
+          "seat": "12",
+          "name": "湯鎮"
+        },
+        "13": {
+          "class_name": "華文一甲",
+          "seat": "13",
+          "name": "林詣樺"
+        },
+        "14": {
+          "class_name": "華文四甲",
+          "seat": "14",
+          "name": "高采彤"
+        },
+        "15": {
+          "class_name": "華文一甲",
+          "seat": "15",
+          "name": "陳詠祺"
+        },
+        "16": {
+          "class_name": "華文一甲",
+          "seat": "16",
+          "name": "王意慧"
+        },
+        "17": {
+          "class_name": "華文一甲",
+          "seat": "17",
+          "name": "張宜汝"
+        },
+        "18": {
+          "class_name": "華文一甲",
+          "seat": "18",
+          "name": "林芳瑾"
+        },
+        "19": {
+          "class_name": "華文一甲",
+          "seat": "19",
+          "name": "張翊恩"
+        },
+        "20": {
+          "class_name": "華文一甲",
+          "seat": "20",
+          "name": "廖俊銘"
+        },
+        "21": {
+          "class_name": "華文一甲",
+          "seat": "21",
+          "name": "許仁豪"
+        },
+        "22": {
+          "class_name": "華文一甲",
+          "seat": "22",
+          "name": "蕭育彥"
+        },
+        "23": {
+          "class_name": "華文一甲",
+          "seat": "23",
+          "name": "陳柔諭"
+        },
+        "24": {
+          "class_name": "華文一甲",
+          "seat": "24",
+          "name": "曾莉茵"
+        },
+        "25": {
+          "class_name": "華文一甲",
+          "seat": "25",
+          "name": "蕭　允"
+        },
+        "26": {
+          "class_name": "華文一甲",
+          "seat": "26",
+          "name": "王唯蓉"
+        },
+        "27": {
+          "class_name": "機械三乙",
+          "seat": "27",
+          "name": "蘇奕銓"
+        },
+        "28": {
+          "class_name": "華文一甲",
+          "seat": "28",
+          "name": "朱佑城"
+        },
+        "29": {
+          "class_name": "華文一甲",
+          "seat": "29",
+          "name": "文冠勛"
+        },
+        "30": {
+          "class_name": "華文四甲",
+          "seat": "30",
+          "name": "田旭凱"
+        },
+        "31": {
+          "class_name": "華文一甲",
+          "seat": "31",
+          "name": "王榮疄"
+        },
+        "32": {
+          "class_name": "華文一甲",
+          "seat": "32",
+          "name": "彭裕宸"
+        },
+        "33": {
+          "class_name": "華文一甲",
+          "seat": "33",
+          "name": "徐畇琦"
+        },
+        "34": {
+          "class_name": "華文一甲",
+          "seat": "34",
+          "name": "王弘蘦"
+        },
+        "35": {
+          "class_name": "華文一甲",
+          "seat": "35",
+          "name": "梁心宇"
+        },
+        "36": {
+          "class_name": "華文一甲",
+          "seat": "36",
+          "name": "吳采薇"
+        },
+        "37": {
+          "class_name": "華文一甲",
+          "seat": "37",
+          "name": "王宥鈞"
+        },
+        "38": {
+          "class_name": "華文一甲",
+          "seat": "38",
+          "name": "周定佑"
+        },
+        "39": {
+          "class_name": "華文一甲",
+          "seat": "39",
+          "name": "簡秀霏"
+        },
+        "40": {
+          "class_name": "華文一甲",
+          "seat": "40",
+          "name": "郭稚涵"
+        },
+        "42": {
+          "class_name": "工設四甲",
+          "seat": "42",
+          "name": "吳亮叡"
+        },
+        "43": {
+          "class_name": "華文一甲",
+          "seat": "43",
+          "name": "孫紘毅"
+        },
+        "44": {
+          "class_name": "華文一甲",
+          "seat": "44",
+          "name": "林子珞"
+        },
+        "45": {
+          "class_name": "華文一甲",
+          "seat": "45",
+          "name": "張荔茹"
+        },
+        "46": {
+          "class_name": "華文一甲",
+          "seat": "46",
+          "name": "許念忻"
+        },
+        "47": {
+          "class_name": "華文一甲",
+          "seat": "47",
+          "name": "李星熠"
+        },
+        "48": {
+          "class_name": "華文一甲",
+          "seat": "48",
+          "name": "黄毓雯"
+        },
+        "50": {
+          "class_name": "華文一甲",
+          "seat": "50",
+          "name": "劉祐丞"
+        },
+        "51": {
+          "class_name": "電機三甲",
+          "seat": "51",
+          "name": "林于謹"
+        },
+        "52": {
+          "class_name": "電機四甲",
+          "seat": "52",
+          "name": "李承翰"
+        },
+        "53": {
+          "class_name": "華文一甲",
+          "seat": "53",
+          "name": "劉彥均"
+        },
+        "54": {
+          "class_name": "華文一甲",
+          "seat": "54",
+          "name": "薛嘉翔"
+        },
+        "55": {
+          "class_name": "華文二甲",
+          "seat": "55",
+          "name": "楊雅涵"
+        },
+        "56": {
+          "class_name": "華文四甲",
+          "seat": "56",
+          "name": "韋玉營"
+        },
+        "59": {
+          "class_name": "經管二乙",
+          "seat": "59",
+          "name": "徐兆諺"
+        },
+        "60": {
+          "class_name": "建築五甲",
+          "seat": "60",
+          "name": "葉振暘"
+        }
+      },
+      "custom_name": ""
+    },
+    "slot_2": {
+      "label": "班級 2",
+      "students": {
+        "01": {
+          "class_name": "經管四乙",
+          "seat": "01",
+          "name": "蔡慧君"
+        },
+        "02": {
+          "class_name": "文創二甲",
+          "seat": "02",
+          "name": "詹喬安"
+        },
+        "03": {
+          "class_name": "經管一乙",
+          "seat": "03",
+          "name": "梁喬姸"
+        },
+        "04": {
+          "class_name": "經管一乙",
+          "seat": "04",
+          "name": "黃姵瑜"
+        },
+        "05": {
+          "class_name": "經管一乙",
+          "seat": "05",
+          "name": "林永翔"
+        },
+        "06": {
+          "class_name": "經管一乙",
+          "seat": "06",
+          "name": "林琮翰"
+        },
+        "07": {
+          "class_name": "電子三甲",
+          "seat": "07",
+          "name": "杜雅禾"
+        },
+        "08": {
+          "class_name": "電子三甲",
+          "seat": "08",
+          "name": "劉晉杰"
+        },
+        "09": {
+          "class_name": "華文四甲",
+          "seat": "09",
+          "name": "鐘宜珈"
+        },
+        "10": {
+          "class_name": "經管一乙",
+          "seat": "10",
+          "name": "陳欣瑜"
+        },
+        "12": {
+          "class_name": "經管一乙",
+          "seat": "12",
+          "name": "張郁唯"
+        },
+        "13": {
+          "class_name": "經管一乙",
+          "seat": "13",
+          "name": "莊梓涓"
+        },
+        "14": {
+          "class_name": "經管一乙",
+          "seat": "14",
+          "name": "張庭瑋"
+        },
+        "15": {
+          "class_name": "經管一乙",
+          "seat": "15",
+          "name": "謝博翔"
+        },
+        "16": {
+          "class_name": "經管一乙",
+          "seat": "16",
+          "name": "許育銓"
+        },
+        "17": {
+          "class_name": "經管一乙",
+          "seat": "17",
+          "name": "黃士澄"
+        },
+        "18": {
+          "class_name": "經管一乙",
+          "seat": "18",
+          "name": "林柏宇"
+        },
+        "19": {
+          "class_name": "經管一乙",
+          "seat": "19",
+          "name": "李芯樺"
+        },
+        "20": {
+          "class_name": "經管一乙",
+          "seat": "20",
+          "name": "吳佳娜"
+        },
+        "21": {
+          "class_name": "經管一乙",
+          "seat": "21",
+          "name": "鄭妍汝"
+        },
+        "22": {
+          "class_name": "經管一乙",
+          "seat": "22",
+          "name": "吳衣宸"
+        },
+        "23": {
+          "class_name": "經管一乙",
+          "seat": "23",
+          "name": "游淮閔"
+        },
+        "24": {
+          "class_name": "經管一乙",
+          "seat": "24",
+          "name": "吳佰億"
+        },
+        "25": {
+          "class_name": "經管一乙",
+          "seat": "25",
+          "name": "陳毅達"
+        },
+        "26": {
+          "class_name": "經管一乙",
+          "seat": "26",
+          "name": "李冠毅"
+        },
+        "27": {
+          "class_name": "經管一乙",
+          "seat": "27",
+          "name": "周常泓"
+        },
+        "28": {
+          "class_name": "經管一乙",
+          "seat": "28",
+          "name": "黃翊嘉"
+        },
+        "29": {
+          "class_name": "經管一乙",
+          "seat": "29",
+          "name": "許維妮"
+        },
+        "30": {
+          "class_name": "經管一乙",
+          "seat": "30",
+          "name": "蔡若岑"
+        },
+        "32": {
+          "class_name": "資管三乙",
+          "seat": "32",
+          "name": "何丞舜"
+        },
+        "33": {
+          "class_name": "經管一乙",
+          "seat": "33",
+          "name": "劉哲睿"
+        },
+        "34": {
+          "class_name": "經管一乙",
+          "seat": "34",
+          "name": "蕭宸佑"
+        },
+        "35": {
+          "class_name": "經管一乙",
+          "seat": "35",
+          "name": "龔奕綸"
+        },
+        "37": {
+          "class_name": "經管一乙",
+          "seat": "37",
+          "name": "林晏竹"
+        },
+        "38": {
+          "class_name": "經管一乙",
+          "seat": "38",
+          "name": "蔡宜蓁"
+        },
+        "39": {
+          "class_name": "經管一乙",
+          "seat": "39",
+          "name": "陳佩伶"
+        },
+        "40": {
+          "class_name": "經管一乙",
+          "seat": "40",
+          "name": "林子期"
+        },
+        "41": {
+          "class_name": "經管一乙",
+          "seat": "41",
+          "name": "湯雅昀"
+        },
+        "42": {
+          "class_name": "經管一乙",
+          "seat": "42",
+          "name": "王子宜"
+        },
+        "43": {
+          "class_name": "經管一乙",
+          "seat": "43",
+          "name": "陳傑銘"
+        },
+        "44": {
+          "class_name": "經管一乙",
+          "seat": "44",
+          "name": "楊畯鋐"
+        },
+        "45": {
+          "class_name": "經管一乙",
+          "seat": "45",
+          "name": "黃冠霖"
+        },
+        "46": {
+          "class_name": "經管一乙",
+          "seat": "46",
+          "name": "劉峻廷"
+        },
+        "47": {
+          "class_name": "經管一乙",
+          "seat": "47",
+          "name": "涂妤華"
+        },
+        "48": {
+          "class_name": "經管一乙",
+          "seat": "48",
+          "name": "李依宸"
+        },
+        "49": {
+          "class_name": "環安四甲",
+          "seat": "49",
+          "name": "黃智義"
+        },
+        "50": {
+          "class_name": "環安四甲",
+          "seat": "50",
+          "name": "柳建宇"
+        },
+        "51": {
+          "class_name": "經管一乙",
+          "seat": "51",
+          "name": "鄭祖宇"
+        },
+        "52": {
+          "class_name": "經管一乙",
+          "seat": "52",
+          "name": "邱紹紘"
+        },
+        "53": {
+          "class_name": "經管一乙",
+          "seat": "53",
+          "name": "陳立哲"
+        },
+        "54": {
+          "class_name": "電機四丁",
+          "seat": "54",
+          "name": "李博薰"
+        },
+        "55": {
+          "class_name": "經管一乙",
+          "seat": "55",
+          "name": "高怡文"
+        },
+        "56": {
+          "class_name": "經管一乙",
+          "seat": "56",
+          "name": "張程寧"
+        },
+        "58": {
+          "class_name": "環安四甲",
+          "seat": "58",
+          "name": "徐偉哲"
+        },
+        "59": {
+          "class_name": "文創三甲",
+          "seat": "59",
+          "name": "徐愛"
+        },
+        "60": {
+          "class_name": "文創三甲",
+          "seat": "60",
+          "name": "周琪婷"
+        }
+      },
+      "custom_name": ""
+    },
+    "slot_3": {
+      "label": "班級 3",
+      "students": {
+        "01": {
+          "class_name": "經管四丙",
+          "seat": "01",
+          "name": "王婕伃"
+        },
+        "02": {
+          "class_name": "經管四甲",
+          "seat": "02",
+          "name": "戴穎翔"
+        },
+        "06": {
+          "class_name": "華文四甲",
+          "seat": "06",
+          "name": "高宛稜"
+        },
+        "07": {
+          "class_name": "文創四甲",
+          "seat": "07",
+          "name": "王文惠"
+        },
+        "08": {
+          "class_name": "文創四甲",
+          "seat": "08",
+          "name": "楊子瑩"
+        },
+        "09": {
+          "class_name": "經管四甲",
+          "seat": "09",
+          "name": "莊宥均"
+        },
+        "11": {
+          "class_name": "環安四甲",
+          "seat": "11",
+          "name": "許傳振"
+        },
+        "12": {
+          "class_name": "環安四乙",
+          "seat": "12",
+          "name": "許立璿"
+        },
+        "13": {
+          "class_name": "材料二甲",
+          "seat": "13",
+          "name": "蘇倖慧"
+        },
+        "14": {
+          "class_name": "材料二甲",
+          "seat": "14",
+          "name": "鍾函芸"
+        },
+        "15": {
+          "class_name": "電機二丙",
+          "seat": "15",
+          "name": "蔡宗侑"
+        },
+        "16": {
+          "class_name": "機械三乙",
+          "seat": "16",
+          "name": "陸竣成"
+        },
+        "17": {
+          "class_name": "經管四甲",
+          "seat": "17",
+          "name": "鄭珮妤"
+        },
+        "18": {
+          "class_name": "經管四甲",
+          "seat": "18",
+          "name": "楊苙禔"
+        },
+        "19": {
+          "class_name": "材料四甲",
+          "seat": "19",
+          "name": "謝詠卉"
+        },
+        "20": {
+          "class_name": "華文三甲",
+          "seat": "20",
+          "name": "林庭安"
+        },
+        "21": {
+          "class_name": "光電四甲",
+          "seat": "21",
+          "name": "陳竑佑"
+        },
+        "22": {
+          "class_name": "經管四甲",
+          "seat": "22",
+          "name": "李庭毅"
+        },
+        "23": {
+          "class_name": "經管四乙",
+          "seat": "23",
+          "name": "范孟鈴"
+        },
+        "24": {
+          "class_name": "經管四丙",
+          "seat": "24",
+          "name": "游韋琦"
+        },
+        "25": {
+          "class_name": "經管四丙",
+          "seat": "25",
+          "name": "鄭宏治"
+        },
+        "27": {
+          "class_name": "華文三甲",
+          "seat": "27",
+          "name": "劉玉禪"
+        },
+        "28": {
+          "class_name": "華文三甲",
+          "seat": "28",
+          "name": "陳彥勻"
+        },
+        "29": {
+          "class_name": "經管二甲",
+          "seat": "29",
+          "name": "林妤倢"
+        },
+        "30": {
+          "class_name": "經管二甲",
+          "seat": "30",
+          "name": "張芩睿"
+        },
+        "31": {
+          "class_name": "經管四丙",
+          "seat": "31",
+          "name": "徐楷桓"
+        },
+        "32": {
+          "class_name": "電子三乙",
+          "seat": "32",
+          "name": "陳宥翔"
+        },
+        "33": {
+          "class_name": "電子二丙",
+          "seat": "33",
+          "name": "塗畯洋"
+        },
+        "34": {
+          "class_name": "語傳二甲",
+          "seat": "34",
+          "name": "涂詠睿"
+        },
+        "35": {
+          "class_name": "華文三甲",
+          "seat": "35",
+          "name": "張惠喬"
+        },
+        "36": {
+          "class_name": "華文三甲",
+          "seat": "36",
+          "name": "廖昱蓁"
+        },
+        "37": {
+          "class_name": "經管二甲",
+          "seat": "37",
+          "name": "謝沛彤"
+        },
+        "38": {
+          "class_name": "經管二甲",
+          "seat": "38",
+          "name": "葉芷瑄"
+        },
+        "39": {
+          "class_name": "材料二甲",
+          "seat": "39",
+          "name": "莊芮昀"
+        },
+        "40": {
+          "class_name": "文觀四甲",
+          "seat": "40",
+          "name": "吳承茹"
+        },
+        "41": {
+          "class_name": "機械四丁",
+          "seat": "41",
+          "name": "李育泰"
+        },
+        "42": {
+          "class_name": "機械四丁",
+          "seat": "42",
+          "name": "呂學沅"
+        },
+        "43": {
+          "class_name": "華文三甲",
+          "seat": "43",
+          "name": "翁睿彣"
+        },
+        "44": {
+          "class_name": "華文三甲",
+          "seat": "44",
+          "name": "鄭宇芯"
+        },
+        "46": {
+          "class_name": "華文二甲",
+          "seat": "46",
+          "name": "林子芮"
+        },
+        "47": {
+          "class_name": "文觀四甲",
+          "seat": "47",
+          "name": "陳昱彣"
+        },
+        "48": {
+          "class_name": "文觀四甲",
+          "seat": "48",
+          "name": "林羽婕"
+        },
+        "49": {
+          "class_name": "機械四丁",
+          "seat": "49",
+          "name": "温銜易"
+        },
+        "50": {
+          "class_name": "機械四丁",
+          "seat": "50",
+          "name": "張凱盛"
+        },
+        "51": {
+          "class_name": "文創二甲",
+          "seat": "51",
+          "name": "鄭宜蓁"
+        },
+        "52": {
+          "class_name": "化工四乙",
+          "seat": "52",
+          "name": "游筑鈞"
+        },
+        "53": {
+          "class_name": "電子四甲",
+          "seat": "53",
+          "name": "王睿謙"
+        },
+        "54": {
+          "class_name": "機械三甲",
+          "seat": "54",
+          "name": "陳浩宗"
+        },
+        "55": {
+          "class_name": "文觀四甲",
+          "seat": "55",
+          "name": "鄭筠臻"
+        },
+        "56": {
+          "class_name": "文觀四甲",
+          "seat": "56",
+          "name": "呂翊甄"
+        },
+        "57": {
+          "class_name": "機械四丁",
+          "seat": "57",
+          "name": "童宥勳"
+        },
+        "58": {
+          "class_name": "機械四丁",
+          "seat": "58",
+          "name": "蔡少懷"
+        },
+        "59": {
+          "class_name": "經管二甲",
+          "seat": "59",
+          "name": "謝佳真"
+        }
+      },
+      "custom_name": ""
+    }
+  },
+  "_exported_at": "2026-11-23 05:15:06"
+}
