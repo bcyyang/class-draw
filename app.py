@@ -244,7 +244,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 注入手機桌面捷徑專屬圖示、自由捲動設定與「零延遲按鍵音效＋震動監聽器」
+# 注入手機桌面捷徑專屬圖示、自由捲動設定與「防雙指誤觸按鍵音效＋震動監聽器」
 components.html(
     f"""
     <script>
@@ -280,9 +280,9 @@ components.html(
             }}
             appTitleMeta.content = "課堂搶答記分";
 
-            // Android / 手機零延遲按鍵音效與震動強化版
-            if (!win.__seatingFeedbackBoundV3) {{
-                win.__seatingFeedbackBoundV3 = true;
+            // Android / 手機防雙指誤觸按鍵音效與震動強化版
+            if (!win.__seatingFeedbackBoundV4) {{
+                win.__seatingFeedbackBoundV4 = true;
 
                 const AudioCtx = win.AudioContext || win.webkitAudioContext;
                 let sharedCtx = null;
@@ -359,8 +359,55 @@ components.html(
                     }} catch (err) {{}}
                 }};
 
-                const handleUserTap = (e) => {{
+                // 追蹤多指觸控與滑動距離，避免雙指縮放或滑動捲動時誤發音效
+                let isMultiTouchGesture = false;
+                let lastMultiTouchEndTs = 0;
+                let touchStartPos = null;
+                let touchMovedTooFar = false;
+
+                const onTouchStart = (e) => {{
                     unlockAudioCtx();
+                    if (e.touches && e.touches.length > 1) {{
+                        isMultiTouchGesture = true;
+                        touchStartPos = null;
+                        return;
+                    }}
+                    if (e.touches && e.touches.length === 1) {{
+                        isMultiTouchGesture = false;
+                        touchMovedTooFar = false;
+                        touchStartPos = {{ x: e.touches[0].clientX, y: e.touches[0].clientY }};
+                    }}
+                }};
+
+                const onTouchMove = (e) => {{
+                    if (e.touches && e.touches.length > 1) {{
+                        isMultiTouchGesture = true;
+                        return;
+                    }}
+                    if (touchStartPos && e.touches && e.touches.length === 1) {{
+                        const dx = Math.abs(e.touches[0].clientX - touchStartPos.x);
+                        const dy = Math.abs(e.touches[0].clientY - touchStartPos.y);
+                        if (dx > 10 || dy > 10) {{
+                            touchMovedTooFar = true;
+                        }}
+                    }}
+                }};
+
+                const onTouchEnd = (e) => {{
+                    if (isMultiTouchGesture) {{
+                        lastMultiTouchEndTs = Date.now();
+                        if (!e.touches || e.touches.length === 0) {{
+                            isMultiTouchGesture = false;
+                        }}
+                    }}
+                }};
+
+                // 僅在真正觸發「單指點擊 (click)」且非滑動/縮放手勢時才播放音效
+                const handleConfirmedClick = (e) => {{
+                    unlockAudioCtx();
+                    if (isMultiTouchGesture || touchMovedTooFar) return;
+                    if (Date.now() - lastMultiTouchEndTs < 350) return;
+
                     const btn = e.target && e.target.closest ? e.target.closest('button') : null;
                     if (!btn || btn.disabled) return;
                     const txt = (btn.innerText || btn.textContent || '').trim();
@@ -372,11 +419,13 @@ components.html(
                 }};
 
                 const bindToDocument = (targetDoc) => {{
-                    if (!targetDoc || targetDoc.__seatingTapAttached) return;
-                    targetDoc.__seatingTapAttached = true;
-                    targetDoc.addEventListener('pointerdown', handleUserTap, {{ capture: true, passive: true }});
-                    targetDoc.addEventListener('touchstart', handleUserTap, {{ capture: true, passive: true }});
-                    targetDoc.addEventListener('click', handleUserTap, true);
+                    if (!targetDoc || targetDoc.__seatingTapAttachedV4) return;
+                    targetDoc.__seatingTapAttachedV4 = true;
+                    targetDoc.addEventListener('touchstart', onTouchStart, {{ capture: true, passive: true }});
+                    targetDoc.addEventListener('touchmove', onTouchMove, {{ capture: true, passive: true }});
+                    targetDoc.addEventListener('touchend', onTouchEnd, {{ capture: true, passive: true }});
+                    targetDoc.addEventListener('touchcancel', onTouchEnd, {{ capture: true, passive: true }});
+                    targetDoc.addEventListener('click', handleConfirmedClick, true);
                 }};
 
                 bindToDocument(doc);
@@ -729,11 +778,9 @@ def build_semester_gradebook_csv(slot_obj: dict, include_today_preview: bool = F
     # 找出所有數字座號（含名單內與今日暫存），建立從 01 到最大座號（至少 64 號或名單上限）的完整連續座號序列
     numeric_seats = [int(s) for s in (set(students.keys()) | set(today_map.keys())) if str(s).isdigit()]
     max_seat = max(numeric_seats) if numeric_seats else 64
-    # 若名單最高座號在 64 以內且班級為 64 格座次表，預設補齊到 64 號（若超過 64 號則依實際最大座號）
     target_max = max(64, max_seat) if max_seat <= 64 else max_seat
     continuous_seats = [f"{i:02d}" for i in range(1, target_max + 1)]
 
-    # 若有非純數字的特殊座號，也附加在最後面
     non_numeric_seats = sorted([s for s in students.keys() if not str(s).isdigit()])
     all_ordered_seats = continuous_seats + non_numeric_seats
 
@@ -757,7 +804,6 @@ def build_semester_gradebook_csv(slot_obj: dict, include_today_preview: bool = F
             if include_today_preview:
                 row.append(int(today_map.get(seat, 0)))
         else:
-            # 空位保留完整空行列（僅保留座號，其餘欄位留空，方便整欄複製貼上對齊正式成績表）
             row = ["", seat, "", ""] + ["" for _ in date_cols]
             if include_today_preview:
                 today_val = int(today_map.get(seat, 0))
@@ -793,7 +839,6 @@ def parse_roster_csv_bytes(raw_bytes: bytes) -> tuple[dict, list]:
     if not required.issubset(set(clean_fields)):
         raise ValueError(f"CSV 標題列必須包含「班級、座號、姓名」，目前偵測到的欄位為：{', '.join(clean_fields)}")
 
-    # 偵測是否為先前匯出的「累計成績總表」，若是則自動還原所有歷史日期欄位
     ignore_cols = {"班級", "座號", "姓名", "學期總加分", "今日未結算暫存", "本堂課總分", "發言次數"}
     date_columns = [col for col in clean_fields if col not in ignore_cols]
 
@@ -1524,7 +1569,7 @@ if st.session_state.view_mode == "admin":
                 else:
                     st.caption("📅 本班尚未結算任何上課日期；下課時輸入日期並按「💾 結算今日寫入總表」，即可自動建立多週累計總表！")
 
-        # 2. 渲染 8 列 × 8 欄座次表（含 2-2-2-2 走道區隔線、今日暫存分數與學期總加分雙標籤）
+        # 2. 渲染 8 列 × 8 欄座次表（含 2-2-2-2 走道區隔線、今日暫存分數）
         @st.fragment(run_every=2)
         def live_seating_grid():
             sync_state_from_disk_if_newer(state)
