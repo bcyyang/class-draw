@@ -406,8 +406,8 @@ components.html(
                     try {{ bindToDocument(fr.contentDocument); }} catch (e) {{}}
                 }});
             }}
-        } catch (e) {{}}
-    })();
+        }} catch (e) {{}}
+    }})();
     </script>
     """,
     height=0,
