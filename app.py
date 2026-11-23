@@ -298,44 +298,6 @@ components.html(
                     }} catch (e) {{}}
                 }};
 
-                // 產生手機打字鍵盤敲擊聲 WAV（加分：柔和咔嗒 / 減分：輕巧水滴）
-                const buildKeyTapWavUrl = (isSub) => {{
-                    const sampleRate = 44100;
-                    const durationSec = isSub ? 0.085 : 0.065;
-                    const totalSamples = Math.floor(sampleRate * durationSec);
-                    const buffer = new ArrayBuffer(44 + totalSamples * 2);
-                    const view = new DataView(buffer);
-                    const writeStr = (offset, str) => {{
-                        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-                    }};
-                    writeStr(0, 'RIFF');
-                    view.setUint32(4, 36 + totalSamples * 2, true);
-                    writeStr(8, 'WAVE');
-                    writeStr(12, 'fmt ');
-                    view.setUint32(16, 16, true);
-                    view.setUint16(20, 1, true);
-                    view.setUint16(22, 1, true);
-                    view.setUint32(24, sampleRate, true);
-                    view.setUint32(28, sampleRate * 2, true);
-                    view.setUint16(32, 2, true);
-                    view.setUint16(34, 16, true);
-                    writeStr(36, 'data');
-                    view.setUint32(40, totalSamples * 2, true);
-
-                    // 加分：柔和咔嗒 (920Hz) / 減分：輕巧水滴 (680Hz 上揚水滴音)
-                    const baseFreq = isSub ? 560 : 920;
-                    const decay = isSub ? 45 : 75;
-                    const noiseMix = isSub ? 0.12 : 0.55;
-                    let seed = 12345;
-                    const nextRand = () => {{
-                        seed = (seed * 16807) % 2147483647;
-                        return (seed / 2147483647) * 2 - 1;
-                    }};
-
-                    for (let i = 0; i < totalSamples; i++) {{
-                        const t = i / sampleRate;
-                        const env = Math.exp(-t * decay);
-                        const pitchCurve = isSub ? baseFreq * (1 + t * 9) : baseFreq * (1 - t * 6);
                 // 產生最單純乾淨的純弦波單音 WAV（加分：1000Hz 清脆嗶一聲 / 減分：520Hz 低沉嘟一聲）
                 const buildPureBeepWavUrl = (freq) => {{
                     const sampleRate = 44100;
