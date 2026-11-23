@@ -183,74 +183,14 @@ st.markdown(
         font-size: 0.82rem;
         font-weight: 900;
         padding: 4px 14px;
-        border-radius: 999px;
-        margin-top: 10px;
-    }
-    .status-closed {
-        display: inline-block;
-        background: #f43f5e;
-        color: #ffffff;
-        font-size: 0.82rem;
-        font-weight: 900;
-        padding: 4px 14px;
-        border-radius: 999px;
-        margin-top: 10px;
-    }
-    /* 座次表專屬樣式 */
-    .seat-card-box {
-        border-radius: 14px;
-        padding: 8px 6px 6px 6px;
-        text-align: center;
-        border: 2px solid #cbd5e1;
-        background: #ffffff;
-        margin-bottom: 4px;
-        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
-    }
-    .seat-card-box.has-score {
-        background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
-        border-color: #f59e0b;
-    }
-    .seat-card-empty {
-        border-radius: 14px;
-        padding: 18px 6px;
-        text-align: center;
-        border: 1.5px dashed #cbd5e1;
-        background: #f8fafc;
-        color: #94a3b8;
-        font-size: 0.8rem;
-        font-weight: 700;
-        min-height: 112px;
-        display: flex;
-    /* 座次表專屬樣式（整張座位方格直接作為可點擊按鈕） */
-    div[data-testid="stButton"] button[kind="secondary"].seat-grid-btn,
-    div[data-testid="stButton"] button[kind="primary"].seat-grid-btn {
-        touch-action: manipulation !important;
-    }
-    .podium-banner {
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-        color: #f8fafc;
-        text-align: center;
-        font-size: 1.15rem;
-        font-weight: 900;
-        letter-spacing: 0.35em;
-        padding: 12px 24px;
-        border-radius: 16px;
-        margin: 14px auto 4px auto;
-        max-width: 480px;
-        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18);
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# 注入手機桌面捷徑專屬圖示與自由捲動設定
+# 注入手機桌面捷徑專屬圖示、自由捲動設定與「零延遲按鍵音效＋震動監聽器」
 components.html(
     f"""
     <script>
     (function() {{
         try {{
-            const doc = window.parent.document;
+            const win = window.parent;
+            const doc = win.document;
             let meta = doc.querySelector('meta[name="viewport"]');
             if (!meta) {{
                 meta = doc.createElement('meta');
@@ -278,6 +218,66 @@ components.html(
                 doc.head.appendChild(appTitleMeta);
             }}
             appTitleMeta.content = "課堂搶答記分";
+
+            // 綁定零延遲按鍵音效與手機震動（直接在使用者手指觸碰瞬間觸發，避開瀏覽器自動播放封鎖）
+            if (!win.__seatingFeedbackBound) {{
+                win.__seatingFeedbackBound = true;
+                const AudioCtx = win.AudioContext || win.webkitAudioContext;
+
+                const unlockAudio = () => {{
+                    try {{
+                        if (!win.__sharedAudioCtx && AudioCtx) {{
+                            win.__sharedAudioCtx = new AudioCtx();
+                        }}
+                        if (win.__sharedAudioCtx && win.__sharedAudioCtx.state === 'suspended') {{
+                            win.__sharedAudioCtx.resume();
+                        }}
+                    }} catch (err) {{}}
+                }};
+
+                const triggerClickFeedback = (kind) => {{
+                    try {{
+                        if (win.navigator && typeof win.navigator.vibrate === 'function') {{
+                            win.navigator.vibrate(kind === 'add' ? 40 : 70);
+                        }}
+                    }} catch (err) {{}}
+
+                    try {{
+                        unlockAudio();
+                        const ctx = win.__sharedAudioCtx;
+                        if (!ctx) return;
+                        const now = ctx.currentTime;
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'sine';
+                        if (kind === 'add') {{
+                            osc.frequency.setValueAtTime(880, now);
+                            osc.frequency.exponentialRampToValueAtTime(1174.66, now + 0.075);
+                        }} else {{
+                            osc.frequency.setValueAtTime(440, now);
+                            osc.frequency.exponentialRampToValueAtTime(311.13, now + 0.085);
+                        }}
+                        gain.gain.setValueAtTime(0.24, now);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.095);
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.start(now);
+                        osc.stop(now + 0.095);
+                    }} catch (err) {{}}
+                }};
+
+                doc.addEventListener('pointerdown', (e) => {{
+                    unlockAudio();
+                    const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+                    if (!btn || btn.disabled) return;
+                    const txt = (btn.innerText || btn.textContent || '').trim();
+                    if (txt === '➕' || txt.startsWith('➕')) {{
+                        triggerClickFeedback('add');
+                    }} else if (txt === '➖' || txt.startsWith('➖')) {{
+                        triggerClickFeedback('sub');
+                    }}
+                }}, true);
+            }}
         }} catch (e) {{}}
     }})();
     </script>
@@ -1323,7 +1323,7 @@ if st.session_state.view_mode == "admin":
                                     "➕",
                                     key=f"seat_add_{seat_str}",
                                     use_container_width=True,
-                                    type="primary" if cur_score > 0 else "secondary",
+                                    type="secondary",
                                     help=f"{seat_str} {name_label} +1 分",
                                     on_click=adjust_seat_score,
                                     args=(seat_str, 1, True),
