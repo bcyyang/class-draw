@@ -219,7 +219,7 @@ st.markdown(
         color: #94a3b8;
         font-size: 0.8rem;
         font-weight: 700;
-        min-height: 112px;
+        min-height: 126px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -280,7 +280,7 @@ components.html(
             }}
             appTitleMeta.content = "課堂搶答記分";
 
-            // Android / 手機零延遲按鍵音效與震動強化版（支援跨 iframe 穿透綁定 + 強制喚醒 AudioContext + 雙脈衝震動）
+            // Android / 手機零延遲按鍵音效與震動強化版
             if (!win.__seatingFeedbackBoundV3) {{
                 win.__seatingFeedbackBoundV3 = true;
 
@@ -298,7 +298,6 @@ components.html(
                     }} catch (e) {{}}
                 }};
 
-                // 產生最單純乾淨的純弦波單音 WAV（加分：1000Hz 清脆嗶一聲 / 減分：520Hz 低沉嘟一聲）
                 const buildPureBeepWavUrl = (freq) => {{
                     const sampleRate = 44100;
                     const durationSec = 0.075;
@@ -346,14 +345,12 @@ components.html(
 
                     unlockAudioCtx();
 
-                    // 1. Android 清晰震動回饋
                     try {{
                         if (win.navigator && typeof win.navigator.vibrate === 'function') {{
                             win.navigator.vibrate(kind === 'add' ? [65] : [50, 40, 65]);
                         }}
                     }} catch (err) {{}}
 
-                    // 2. HTML5 Audio 播放純淨單音
                     try {{
                         const audioEl = new win.Audio(kind === 'add' ? addWavUrl : subWavUrl);
                         audioEl.volume = 1.0;
@@ -382,7 +379,6 @@ components.html(
                     targetDoc.addEventListener('click', handleUserTap, true);
                 }};
 
-                // 同時綁定主視窗與所有同源子 iframe
                 bindToDocument(doc);
                 const frames = doc.querySelectorAll('iframe');
                 frames.forEach((fr) => {{
@@ -398,7 +394,7 @@ components.html(
 )
 
 # ==========================================
-# 2. 全班共用記憶體 + 本機 JSON 持久化狀態 + GitHub 預設備份讀取
+# 2. 全班共用記憶體 + 本機 JSON 持久化狀態 + 班級累計成績總表結構
 # ==========================================
 STATE_FILE = "classroom_state.json"
 DEFAULT_BACKUP_FILE = "default_rosters.json"
@@ -419,18 +415,40 @@ DEFAULT_CLASSROOM_DATA = {
     "auto_award": True,
     "active_slot": "slot_1",
     "rosters": {
-        "slot_1": {"label": "班級 1", "custom_name": "", "students": {}},
-        "slot_2": {"label": "班級 2", "custom_name": "", "students": {}},
-        "slot_3": {"label": "班級 3", "custom_name": "", "students": {}},
+        "slot_1": {"label": "班級 1", "custom_name": "", "students": {}, "date_columns": []},
+        "slot_2": {"label": "班級 2", "custom_name": "", "students": {}, "date_columns": []},
+        "slot_3": {"label": "班級 3", "custom_name": "", "students": {}, "date_columns": []},
     },
 }
 
 
-def get_active_roster(state_dict: dict) -> dict:
-    """取得目前所選班級的學生名單字典 {seat: info}"""
+def ensure_slot_schema(slot_data: dict):
+    """確保單一班級槽位具備完整的累計成績結構"""
+    if "students" not in slot_data or not isinstance(slot_data["students"], dict):
+        slot_data["students"] = {}
+    if "date_columns" not in slot_data or not isinstance(slot_data["date_columns"], list):
+        slot_data["date_columns"] = []
+    for seat, info in slot_data["students"].items():
+        if "records" not in info or not isinstance(info["records"], dict):
+            info["records"] = {}
+        # 依據 records 重新計算學期總加分，確保永遠一致
+        info["semester_total"] = sum(int(v) for v in info["records"].values())
+
+
+def get_active_slot_obj(state_dict: dict) -> dict:
+    """取得目前所選班級槽位完整物件"""
     rosters = state_dict.get("rosters", {})
     slot = state_dict.get("active_slot", "slot_1")
-    return rosters.get(slot, {}).get("students", {})
+    if slot not in rosters:
+        slot = "slot_1"
+    slot_obj = rosters.setdefault(slot, {"label": "班級 1", "custom_name": "", "students": {}, "date_columns": []})
+    ensure_slot_schema(slot_obj)
+    return slot_obj
+
+
+def get_active_roster(state_dict: dict) -> dict:
+    """取得目前所選班級的學生名單字典 {seat: info}"""
+    return get_active_slot_obj(state_dict).get("students", {})
 
 
 def get_slot_display_title(state_dict: dict, slot_key: str) -> str:
@@ -458,7 +476,7 @@ def get_slot_display_title(state_dict: dict, slot_key: str) -> str:
 
 
 def load_persisted_state() -> dict:
-    """啟動時從磁碟讀取課堂紀錄（若無暫存檔則自動讀取 GitHub 倉庫內的 default_rosters.json）"""
+    """啟動時從磁碟讀取課堂紀錄"""
     data = {
         k: (json.loads(json.dumps(v)) if isinstance(v, (dict, list)) else v)
         for k, v in DEFAULT_CLASSROOM_DATA.items()
@@ -478,6 +496,9 @@ def load_persisted_state() -> dict:
                     data["rosters"]["slot_1"]["students"] = saved["roster"]
         except Exception:
             pass
+    for s_key in ("slot_1", "slot_2", "slot_3"):
+        if s_key in data.get("rosters", {}):
+            ensure_slot_schema(data["rosters"][s_key])
     return data
 
 
@@ -572,49 +593,21 @@ if "student_url_input" not in st.session_state:
     st.session_state.student_url_input = state.get(
         "student_share_url", "https://class-draw-zxzusy7bhdm3mshdzj5yxf.streamlit.app/"
     )
-if "seating_click_mode" not in st.session_state:
-    st.session_state.seating_click_mode = "add"
 if "seating_feedback_trigger" not in st.session_state:
     st.session_state.seating_feedback_trigger = None
 if "seating_undo_stack" not in st.session_state:
     st.session_state.seating_undo_stack = []
 if "uploader_reset_ids" not in st.session_state:
     st.session_state.uploader_reset_ids = {"slot_1": 0, "slot_2": 0, "slot_3": 0}
-
-
-def build_permanent_backup_json(state_dict: dict) -> bytes:
-    """產生可上傳至 GitHub 倉庫的永久備份檔 default_rosters.json"""
-    backup_payload = {
-        "course_title": state_dict.get("course_title", "課堂即時搶答抽籤"),
-        "admin_pin": state_dict.get("admin_pin", DEFAULT_PIN),
-        "active_slot": state_dict.get("active_slot", "slot_1"),
-        "rosters": state_dict.get("rosters", DEFAULT_CLASSROOM_DATA["rosters"]),
-        "_exported_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
-    return json.dumps(backup_payload, ensure_ascii=False, indent=2).encode("utf-8")
-
-
-def restore_from_backup_bytes(raw_bytes: bytes):
-    """從備份 JSON 檔還原三班名單與設定"""
-    parsed = json.loads(raw_bytes.decode("utf-8-sig"))
-    if not isinstance(parsed, dict) or "rosters" not in parsed:
-        raise ValueError("備份檔格式不正確，請確認是否為系統匯出的 default_rosters.json。")
-    with state["lock"]:
-        if "rosters" in parsed and isinstance(parsed["rosters"], dict):
-            state["rosters"] = parsed["rosters"]
-        if "active_slot" in parsed:
-            state["active_slot"] = parsed["active_slot"]
-        if "admin_pin" in parsed and str(parsed["admin_pin"]).strip():
-            state["admin_pin"] = str(parsed["admin_pin"]).strip()
-        if "course_title" in parsed and str(parsed["course_title"]).strip():
-            state["course_title"] = str(parsed["course_title"]).strip()
-        save_persisted_state(state)
+if "settle_date_label" not in st.session_state:
+    st.session_state.settle_date_label = datetime.now().strftime("%Y/%m/%d")
 
 
 def switch_active_class_slot(slot_key: str):
     """立即切換目前上課班級槽位並寫入磁碟"""
     with state["lock"]:
         state["active_slot"] = slot_key
+        ensure_slot_schema(state["rosters"][slot_key])
         save_persisted_state(state)
     st.session_state["class_switched_toast"] = f"📚 已切換至：{get_slot_display_title(state, slot_key)}"
 
@@ -631,21 +624,13 @@ def save_slot_custom_name(slot_key: str):
 
 
 def sync_round_points_from_widget():
-    """同步本題配分"""
     with state["lock"]:
         state["round_points"] = int(st.session_state.round_points_input)
         save_persisted_state(state)
 
 
-def sync_auto_award_from_widget():
-    """同步自動給分開關狀態"""
-    with state["lock"]:
-        state["auto_award"] = bool(st.session_state.auto_award_input)
-        save_persisted_state(state)
-
-
 def clear_all_scoreboard_records():
-    """清空全班記分板座號與分數紀錄"""
+    """清空今日暫存記分板座號與分數紀錄"""
     with state["lock"]:
         state["scores"] = {}
         state["picked_history"] = {}
@@ -657,7 +642,7 @@ def clear_all_scoreboard_records():
 
 
 def reset_entire_classroom():
-    """開啟新課堂：一鍵將所有狀態全部重置回到原始狀態"""
+    """開啟新課堂：重置今日搶答與暫存得分（保留三班名單與歷史累計總表）"""
     with state["lock"]:
         state["round_id"] = 1
         state["is_open"] = True
@@ -681,7 +666,7 @@ def close_new_class_confirm():
 
 
 # ==========================================
-# 4. 核心演算法、音效、CSV 匯出與座次表輔助函式
+# 4. 核心演算法、音效、多週累計總表 CSV 匯入/匯出與結算函式
 # ==========================================
 def normalize_seat_num(raw_text: str) -> str:
     """標準化座號格式（例如將 '5' 自動補零成 '05'）"""
@@ -691,6 +676,135 @@ def normalize_seat_num(raw_text: str) -> str:
     if clean.isdigit() and len(clean) == 1:
         return f"0{clean}"
     return clean
+
+
+def settle_today_scores_to_roster(date_label: str, reset_today: bool = True):
+    """將今日課堂得分結算寫入目前班級的累計成績總表，並重新計算學期總加分"""
+    clean_date = date_label.strip() or datetime.now().strftime("%Y/%m/%d")
+    with state["lock"]:
+        slot_obj = get_active_slot_obj(state)
+        students = slot_obj["students"]
+        date_cols = slot_obj["date_columns"]
+        today_scores = state.get("scores", {})
+
+        if not students:
+            return False, "請先匯入本班學生名單，再執行結算！"
+
+        if clean_date not in date_cols:
+            date_cols.append(clean_date)
+
+        settled_count = 0
+        for seat, info in students.items():
+            pts = int(today_scores.get(seat, 0))
+            info.setdefault("records", {})
+            # 累加寫入該日期欄位（若同一天按兩次結算，會自動疊加）
+            info["records"][clean_date] = int(info["records"].get(clean_date, 0)) + pts
+            info["semester_total"] = sum(int(v) for v in info["records"].values())
+            if pts > 0:
+                settled_count += 1
+
+        if reset_today:
+            state["scores"] = {}
+            state["picked_history"] = {}
+            state["awarded_winners"] = []
+            state["last_winners"] = []
+
+        save_persisted_state(state)
+
+    st.session_state.seating_undo_stack = []
+    return True, f"✅ 已將今日成績結算寫入「{clean_date}」欄位（共 {settled_count} 位同學有加分，學期總分已自動更新）！"
+
+
+def build_semester_gradebook_csv(slot_obj: dict, include_today_preview: bool = False, today_scores: dict = None) -> bytes:
+    """產生完整班級多週累計成績總表 CSV（班級, 座號, 姓名, 學期總加分, 日期1, 日期2...）"""
+    ensure_slot_schema(slot_obj)
+    students = slot_obj.get("students", {})
+    date_cols = list(slot_obj.get("date_columns", []))
+    today_map = today_scores or {}
+
+    header = ["班級", "座號", "姓名", "學期總加分"] + date_cols
+    if include_today_preview:
+        header.append("今日未結算暫存")
+
+    sorted_seats = sorted(students.keys(), key=lambda s: (int(s) if s.isdigit() else 9999, s))
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(header)
+
+    for seat in sorted_seats:
+        info = students[seat]
+        records = info.get("records", {})
+        sem_total = sum(int(v) for v in records.values())
+        row = [
+            info.get("class_name", ""),
+            seat,
+            info.get("name", ""),
+            sem_total,
+        ]
+        for d_col in date_cols:
+            row.append(int(records.get(d_col, 0)))
+        if include_today_preview:
+            row.append(int(today_map.get(seat, 0)))
+        writer.writerow(row)
+
+    return output.getvalue().encode("utf-8-sig")
+
+
+def parse_roster_csv_bytes(raw_bytes: bytes) -> tuple[dict, list]:
+    """
+    解析班級名單 CSV：
+    1. 支援初次名單（班級、座號、姓名）
+    2. 支援接續累計總表（班級、座號、姓名、學期總加分、2026/11/23、2026/11/30...）
+    回傳：(parsed_roster_dict, detected_date_columns_list)
+    """
+    text = None
+    for enc in ("utf-8-sig", "utf-8", "cp950", "big5"):
+        try:
+            text = raw_bytes.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    if text is None:
+        raise ValueError("無法辨識 CSV 檔案編碼，請存為 UTF-8 或 Excel CSV 格式。")
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise ValueError("CSV 檔案內容為空。")
+
+    clean_fields = [f.strip().lstrip("\ufeff") for f in reader.fieldnames if f and f.strip()]
+    required = {"班級", "座號", "姓名"}
+    if not required.issubset(set(clean_fields)):
+        raise ValueError(f"CSV 標題列必須包含「班級、座號、姓名」，目前偵測到的欄位為：{', '.join(clean_fields)}")
+
+    # 偵測是否為先前匯出的「累計成績總表」，若是則自動還原所有歷史日期欄位
+    ignore_cols = {"班級", "座號", "姓名", "學期總加分", "今日未結算暫存", "本堂課總分", "發言次數"}
+    date_columns = [col for col in clean_fields if col not in ignore_cols]
+
+    parsed_roster = {}
+    for row in reader:
+        clean_row = {(k.strip().lstrip("\ufeff") if k else ""): (v.strip() if v else "") for k, v in row.items()}
+        seat = normalize_seat_num(clean_row.get("座號", ""))
+        if not seat:
+            continue
+        records = {}
+        for d_col in date_columns:
+            raw_val = clean_row.get(d_col, "0")
+            try:
+                records[d_col] = int(float(raw_val)) if raw_val != "" else 0
+            except ValueError:
+                records[d_col] = 0
+
+        parsed_roster[seat] = {
+            "class_name": clean_row.get("班級", ""),
+            "seat": seat,
+            "name": clean_row.get("姓名", ""),
+            "records": records,
+            "semester_total": sum(records.values()),
+        }
+
+    if not parsed_roster:
+        raise ValueError("CSV 檔案中沒有讀取到任何有效的座號資料。")
+    return parsed_roster, date_columns
 
 
 def pick_weighted_candidates(candidates_dict, history_dict, count=1, weighted=True):
@@ -775,7 +889,7 @@ def play_sound_effect(kind="fanfare", enabled=True):
 
 
 def build_scores_csv(scores_dict, history_dict, sort_mode="seat", roster_dict=None):
-    """產生含 UTF-8 BOM 的成績 CSV 資料（座號在第一欄，僅列出有加分 > 0 的同學）"""
+    """產生單堂課即時成績 CSV 資料"""
     roster = roster_dict or {}
     all_seats = set(scores_dict.keys()) | set(history_dict.keys()) | set(roster.keys())
     items = []
@@ -796,56 +910,18 @@ def build_scores_csv(scores_dict, history_dict, sort_mode="seat", roster_dict=No
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["座號", "班級", "姓名", "本堂課總分", "發言次數"])
+    writer.writerow(["座號", "班級", "姓名", "今日得分", "發言次數"])
 
-    plain_lines = ["座號\t班級\t姓名\t總分\t發言次數"]
+    plain_lines = ["座號\t班級\t姓名\t今日得分\t發言次數"]
     for cls_name, seat, stu_name, sc, cnt in items:
         writer.writerow([seat, cls_name, stu_name, sc, cnt])
         plain_lines.append(f"{seat}\t{cls_name}\t{stu_name}\t{sc}分\t({cnt}次)")
 
     if not items:
-        plain_lines.append("（目前尚無任何得分紀錄）")
+        plain_lines.append("（今日目前尚無任何得分紀錄）")
 
     csv_bytes = output.getvalue().encode("utf-8-sig")
     return csv_bytes, "\n".join(plain_lines)
-
-
-def parse_roster_csv_bytes(raw_bytes: bytes) -> dict:
-    """解析班級名單 CSV（欄位需包含：班級、座號、姓名；自動相容 UTF-8 與 Big5/CP950）"""
-    text = None
-    for enc in ("utf-8-sig", "utf-8", "cp950", "big5"):
-        try:
-            text = raw_bytes.decode(enc)
-            break
-        except UnicodeDecodeError:
-            continue
-    if text is None:
-        raise ValueError("無法辨識 CSV 檔案編碼，請存為 UTF-8 或 Excel CSV 格式。")
-
-    reader = csv.DictReader(io.StringIO(text))
-    if not reader.fieldnames:
-        raise ValueError("CSV 檔案內容為空。")
-
-    clean_fields = [f.strip().lstrip("\ufeff") for f in reader.fieldnames if f]
-    required = {"班級", "座號", "姓名"}
-    if not required.issubset(set(clean_fields)):
-        raise ValueError(f"CSV 標題列必須包含「班級、座號、姓名」，目前偵測到的欄位為：{', '.join(clean_fields)}")
-
-    parsed_roster = {}
-    for row in reader:
-        clean_row = {(k.strip().lstrip("\ufeff") if k else ""): (v.strip() if v else "") for k, v in row.items()}
-        seat = normalize_seat_num(clean_row.get("座號", ""))
-        if not seat:
-            continue
-        parsed_roster[seat] = {
-            "class_name": clean_row.get("班級", ""),
-            "seat": seat,
-            "name": clean_row.get("姓名", ""),
-        }
-
-    if not parsed_roster:
-        raise ValueError("CSV 檔案中沒有讀取到任何有效的座號資料。")
-    return parsed_roster
 
 
 def generate_sample_roster_csv() -> bytes:
@@ -869,7 +945,7 @@ def generate_sample_roster_csv() -> bytes:
 
 
 def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
-    """點擊座次表時直接加減該生總分"""
+    """點擊座次表時直接加減該生今日暫存分數"""
     with state["lock"]:
         old_val = int(state["scores"].get(seat, 0))
         new_val = max(0, old_val + delta)
@@ -886,13 +962,13 @@ def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
     stu_name = stu_info.get("name", "")
     display_who = f"{seat}號 {stu_name}".strip()
     if actual_delta > 0:
-        st.session_state["seating_toast_msg"] = f"⭐ {display_who} +{actual_delta} 分（目前總分 {new_val} 分）"
+        st.session_state["seating_toast_msg"] = f"⭐ {display_who} 今日 +{actual_delta} 分（今日累計 {new_val} 分）"
         st.session_state.seating_feedback_trigger = ("add", time.time())
     elif actual_delta < 0:
-        st.session_state["seating_toast_msg"] = f"➖ {display_who} {actual_delta} 分（目前總分 {new_val} 分）"
+        st.session_state["seating_toast_msg"] = f"➖ {display_who} 今日 {actual_delta} 分（今日累計 {new_val} 分）"
         st.session_state.seating_feedback_trigger = ("sub", time.time())
     else:
-        st.session_state["seating_toast_msg"] = f"ℹ️ {display_who} 目前已是 0 分"
+        st.session_state["seating_toast_msg"] = f"ℹ️ {display_who} 今日目前已是 0 分"
         st.session_state.seating_feedback_trigger = ("sub", time.time())
 
 
@@ -937,7 +1013,7 @@ def undo_last_seating_click():
     seat, last_delta = st.session_state.seating_undo_stack.pop()
     adjust_seat_score(seat, -last_delta, record_undo=False)
     stu_name = get_active_roster(state).get(seat, {}).get("name", "")
-    st.session_state["seating_toast_msg"] = f"↩️ 已復原 {seat}號 {stu_name} 的上一筆變動（目前 {state['scores'].get(seat, 0)} 分）"
+    st.session_state["seating_toast_msg"] = f"↩️ 已復原 {seat}號 {stu_name} 的上一筆變動（今日 {state['scores'].get(seat, 0)} 分）"
 
 
 def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, awarded_list=None):
@@ -1002,7 +1078,7 @@ def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, 
 nav_col1, nav_col2, nav_col3 = st.columns([8.2, 0.9, 0.9])
 with nav_col1:
     st.markdown(
-        '<div style="font-size:0.78rem; color:#64748b; padding-top:4px;">💡 同網址雙模式：預設為學生端；網址加 <code>?mode=admin</code> 即為老師端 · <span style="background:#e0e7ff; color:#3730a3; font-weight:800; padding:1px 8px; border-radius:999px;">v3.2 永久備份版</span></div>',
+        '<div style="font-size:0.78rem; color:#64748b; padding-top:4px;">💡 同網址雙模式：預設為學生端；網址加 <code>?mode=admin</code> 即為老師端 · <span style="background:#dcfce7; color:#166534; font-weight:800; padding:1px 8px; border-radius:999px;">v4.0 學期累計總表版</span></div>',
         unsafe_allow_html=True,
     )
 with nav_col2:
@@ -1117,7 +1193,7 @@ if st.session_state.view_mode == "admin":
             "🏫 開啟新課堂",
             key="open_new_class_trigger_btn",
             use_container_width=True,
-            help="全部重置回到原始狀態（題次歸 1、清空名單、記分板與發言紀錄全部歸零；保留已匯入的三班名單）",
+            help="重置今日搶答題次與今日暫存分數（保留三班名單與歷史累計總表）",
             on_click=open_new_class_confirm,
         )
 
@@ -1208,10 +1284,10 @@ if st.session_state.view_mode == "admin":
         with st.container(border=True):
             warn_c1, warn_c2, warn_c3 = st.columns([6.4, 1.8, 1.8])
             with warn_c1:
-                st.warning("⚠️ 確定要**開啟新課堂**嗎？這將會把**題次歸 1、舉手名單、記分板分數與已發言紀錄全部清空**回到原始狀態！")
+                st.warning("⚠️ 確定要**開啟新課堂**嗎？這將會把**題次歸 1、今日暫存分數與舉手名單清空**（已結算寫入的「學期累計總表」會完整保留）！")
             with warn_c2:
                 st.button(
-                    "✅ 確定全部重置",
+                    "✅ 確定重置今日紀錄",
                     key="confirm_reset_entire_class_btn",
                     type="primary",
                     use_container_width=True,
@@ -1230,10 +1306,10 @@ if st.session_state.view_mode == "admin":
         st.session_state.play_fanfare_once = False
 
     if st.session_state.pop("scores_cleared_toast", False):
-        st.toast("🗑️ 已刪除全部課堂記分板紀錄！")
+        st.toast("🗑️ 已清空今日暫存記分板紀錄！")
 
     if st.session_state.pop("new_class_toast", False):
-        st.toast("🏫 已開啟新課堂，所有紀錄已全部重置回到原始狀態！")
+        st.toast("🏫 已開啟新課堂，今日暫存紀錄已重置（歷史累計總表已保留）！")
 
     class_switched_toast = st.session_state.pop("class_switched_toast", None)
     if class_switched_toast:
@@ -1248,21 +1324,47 @@ if st.session_state.view_mode == "admin":
         play_seating_click_feedback(seating_fb[0])
 
     # ========================================================
-    # 分頁 B：🗺️ 全班座次表互動記分 (8 列 × 8 欄，由下往上排列)
+    # 分頁 B：🗺️ 全班座次表互動記分 + 學期累計總表結算
     # ========================================================
     if st.session_state.admin_tab == "seating":
-        roster = get_active_roster(state)
+        slot_obj = get_active_slot_obj(state)
+        roster = slot_obj["students"]
         cur_slot_key = state.get("active_slot", "slot_1")
+        date_cols = slot_obj.get("date_columns", [])
 
-        # 1. 上方操作與 CSV 匯入工具列（永久保存三班名單整合於下方管理選單內，預設收合）
+        # 1. 上方操作、今日成績一鍵結算與累計總表下載列
         with st.container(border=True):
-            ctrl_c1, ctrl_c2, ctrl_c3 = st.columns([5.0, 2.2, 2.8])
+            ctrl_c1, ctrl_c2, ctrl_c3, ctrl_c4 = st.columns([3.8, 2.0, 2.2, 2.0])
             with ctrl_c1:
                 st.markdown(
-                    '<div style="padding-top:6px; font-size:0.95rem; font-weight:700; color:#1e293b;">👆 點擊座位下方 <span style="color:#4f46e5;">左鍵 ➕ 加 1 分</span>、<span style="color:#64748b;">右鍵 ➖ 減 1 分</span>（電腦與手機每 2 秒自動雙向同步）</div>',
+                    '<div style="padding-top:4px; font-size:0.92rem; font-weight:700; color:#1e293b;">'
+                    '👆 點擊 <span style="color:#4f46e5;">➕ 加 1 分</span> / <span style="color:#64748b;">➖ 減 1 分</span> · '
+                    f'已累計 <span style="color:#059669;">{len(date_cols)} 堂課</span> 歷史紀錄</div>',
                     unsafe_allow_html=True,
                 )
             with ctrl_c2:
+                st.text_input(
+                    "結算日期欄位名稱",
+                    key="settle_date_label",
+                    label_visibility="collapsed",
+                    placeholder="如 2026/11/23",
+                    help="下課結算時，將今日分數寫入此日期欄位名稱",
+                )
+            with ctrl_c3:
+                if st.button(
+                    "💾 結算今日寫入總表",
+                    type="primary",
+                    use_container_width=True,
+                    key="settle_today_btn",
+                    help="將今日所有同學得分寫入上方日期欄位，自動加總學期總分，並把今日暫存分數歸零",
+                ):
+                    ok, msg = settle_today_scores_to_roster(st.session_state.settle_date_label, reset_today=True)
+                    if ok:
+                        st.toast(msg)
+                        st.rerun()
+                    else:
+                        st.warning(msg)
+            with ctrl_c4:
                 undo_len = len(st.session_state.seating_undo_stack)
                 st.button(
                     f"↩️ 復原 ({undo_len})" if undo_len > 0 else "↩️ 復原上一筆",
@@ -1271,32 +1373,94 @@ if st.session_state.view_mode == "admin":
                     key="seating_undo_btn",
                     on_click=undo_last_seating_click,
                 )
-            with ctrl_c3:
-                csv_bytes, _ = build_scores_csv(
+
+            # 第二列：下載本班多週累計成績總表 CSV & 預覽歷史累計明細
+            dl_c1, dl_c2, dl_c3 = st.columns([4.6, 2.7, 2.7])
+            with dl_c1:
+                if date_cols:
+                    recent_str = "、".join(date_cols[-4:])
+                    more_str = f" 等共 {len(date_cols)} 次" if len(date_cols) > 4 else ""
+                    st.caption(f"📅 本班已登錄上課日期：{recent_str}{more_str}（下課請按「💾 結算今日寫入總表」再下載總表備份）")
+                else:
+                    st.caption("📅 本班尚未結算任何上課日期；下課時輸入日期並按「💾 結算今日寫入總表」，即可自動建立多週累計總表！")
+            with dl_c2:
+                semester_csv_bytes = build_semester_gradebook_csv(
+                    slot_obj,
+                    include_today_preview=any(v > 0 for v in state["scores"].values()),
+                    today_scores=state["scores"],
+                )
+                today_str = datetime.now().strftime("%Y%m%d")
+                slot_short_name = get_slot_display_title(state, cur_slot_key).split("（")[0].replace("：", "_")
+                st.download_button(
+                    label="📊 下載學期累計總表 (.csv)",
+                    data=semester_csv_bytes,
+                    file_name=f"{slot_short_name}_學期累計成績總表_{today_str}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="seating_download_semester_csv_btn",
+                )
+            with dl_c3:
+                today_csv_bytes, _ = build_scores_csv(
                     state["scores"],
                     state["picked_history"],
                     sort_mode="seat",
                     roster_dict=roster,
                 )
-                today_str = datetime.now().strftime("%Y%m%d")
-                safe_title = "".join(c for c in state["course_title"] if c.isalnum() or c in ("_", "-")) or "課堂成績"
-                slot_short_name = get_slot_display_title(state, cur_slot_key).split("（")[0].replace("：", "_")
                 st.download_button(
-                    label="📥 下載成績 CSV",
-                    data=csv_bytes,
-                    file_name=f"{safe_title}_{slot_short_name}_合併成績表_{today_str}.csv",
+                    label="📥 僅下載今日得分明細",
+                    data=today_csv_bytes,
+                    file_name=f"{slot_short_name}_今日得分_{today_str}.csv",
                     mime="text/csv",
                     use_container_width=True,
-                    key="seating_download_csv_btn",
+                    key="seating_download_today_csv_btn",
                 )
 
-            with st.expander("📂 管理三個班級的 CSV 名單（分別上傳、永久保存、隨時切換）", expanded=False):
+            # 展開區 1：檢視本班多週累計成績總表（可直接刪除誤建的日期欄位）
+            if roster and date_cols:
+                with st.expander(f"📋 檢視本班多週累計成績總表（共 {len(roster)} 人 × {len(date_cols)} 堂課）", expanded=False):
+                    table_rows = []
+                    for s_num in sorted(roster.keys(), key=lambda x: (int(x) if x.isdigit() else 9999, x)):
+                        info = roster[s_num]
+                        recs = info.get("records", {})
+                        row_dict = {
+                            "班級": info.get("class_name", ""),
+                            "座號": s_num,
+                            "姓名": info.get("name", ""),
+                            "學期總加分": sum(int(v) for v in recs.values()),
+                        }
+                        for d_col in date_cols:
+                            row_dict[d_col] = int(recs.get(d_col, 0))
+                        table_rows.append(row_dict)
+                    st.dataframe(table_rows, use_container_width=True, hide_index=True)
+
+                    del_c1, del_c2 = st.columns([3.0, 2.0])
+                    with del_c1:
+                        del_target_date = st.selectbox(
+                            "若需刪除某次誤結算的日期欄位，請在此選擇：",
+                            options=date_cols,
+                            key="del_date_col_select",
+                        )
+                    with del_c2:
+                        st.markdown("<div style='padding-top:26px;'></div>", unsafe_allow_html=True)
+                        if st.button("🗑️ 刪除此日期欄位並重算總分", use_container_width=True, key="del_date_col_btn"):
+                            with state["lock"]:
+                                if del_target_date in slot_obj["date_columns"]:
+                                    slot_obj["date_columns"].remove(del_target_date)
+                                for s_info in slot_obj["students"].values():
+                                    s_info.get("records", {}).pop(del_target_date, None)
+                                    s_info["semester_total"] = sum(int(v) for v in s_info.get("records", {}).values())
+                                save_persisted_state(state)
+                            st.toast(f"🗑️ 已移除「{del_target_date}」欄位並重新計算學期總分！")
+                            st.rerun()
+
+            # 展開區 2：管理三個班級的 CSV 名單（支援匯入初次名單 或 匯入上週下載的累計總表接續累計）
+            with st.expander("📂 管理三個班級的 CSV 名單（匯入初次名單 / 匯入上週累計總表接續累計）", expanded=False):
                 info_c1, info_c2 = st.columns([7.5, 2.5])
                 with info_c1:
-                    st.caption("格式說明：CSV 標題列請命名為 **班級、座號、姓名**（共三欄，無需學號）。三個班級各自上傳後可點擊下方「📦 下載三班永久備份檔 (default_rosters.json)」存入 GitHub，主機重啟也不會遺失。")
+                    st.caption("💡 支援兩種 CSV 匯入：① 學期初的「班級、座號、姓名」三欄名單；② 上週下載的「學期累計成績總表 (.csv)」，匯入後會自動還原過去所有日期欄位並繼續往右累加！")
                 with info_c2:
                     st.download_button(
-                        label="📄 下載 CSV 範本",
+                        label="📄 下載空白名單範本",
                         data=generate_sample_roster_csv(),
                         file_name="班級座次表範本.csv",
                         mime="text/csv",
@@ -1310,10 +1474,11 @@ if st.session_state.view_mode == "admin":
                         with st.container(border=True):
                             slot_title = get_slot_display_title(state, s_key)
                             is_active_slot = (s_key == cur_slot_key)
+                            s_dates_cnt = len(state["rosters"][s_key].get("date_columns", []))
                             if is_active_slot:
-                                st.markdown(f"**🟢 {slot_title}**（使用中）")
+                                st.markdown(f"**🟢 {slot_title}**（使用中 · 已記 {s_dates_cnt} 次）")
                             else:
-                                st.markdown(f"**⚪ {slot_title}**")
+                                st.markdown(f"**⚪ {slot_title}**（已記 {s_dates_cnt} 次）")
 
                             cur_custom = state["rosters"][s_key].get("custom_name", "")
                             st.text_input(
@@ -1340,13 +1505,15 @@ if st.session_state.view_mode == "admin":
                                     key=f"confirm_import_{s_key}_btn",
                                 ):
                                     try:
-                                        new_roster = parse_roster_csv_bytes(up_file.getvalue())
+                                        new_roster, imported_dates = parse_roster_csv_bytes(up_file.getvalue())
                                         with state["lock"]:
                                             state["rosters"][s_key]["students"] = new_roster
+                                            state["rosters"][s_key]["date_columns"] = imported_dates
                                             state["active_slot"] = s_key
                                             save_persisted_state(state)
                                         st.session_state.uploader_reset_ids[s_key] = st.session_state.uploader_reset_ids.get(s_key, 0) + 1
-                                        st.toast(f"🎉 已匯入「{get_slot_display_title(state, s_key)}」並自動切換使用！")
+                                        extra_msg = f"（含 {len(imported_dates)} 次歷史日期成績）" if imported_dates else ""
+                                        st.toast(f"🎉 已匯入「{get_slot_display_title(state, s_key)}」{extra_msg}！")
                                         st.rerun()
                                     except Exception as e:
                                         st.error(f"匯入失敗：{e}")
@@ -1368,15 +1535,16 @@ if st.session_state.view_mode == "admin":
                                 if st.button("清除名單", key=f"clear_{s_key}_btn", disabled=not has_data, use_container_width=True):
                                     with state["lock"]:
                                         state["rosters"][s_key]["students"] = {}
+                                        state["rosters"][s_key]["date_columns"] = []
                                         save_persisted_state(state)
-                                    st.toast(f"已清除班級 {idx + 1} 名單")
-        # 2. 渲染 8 列 × 8 欄座次表（每格下方配置左＋1、右－1 雙按鈕，且每 2 位同學之間加上走道區隔線）
+                                    st.toast(f"已清除班級 {idx + 1} 名單與累計紀錄")
+
+        # 2. 渲染 8 列 × 8 欄座次表（含 2-2-2-2 走道區隔線、今日暫存分數與學期總加分雙標籤）
         @st.fragment(run_every=2)
         def live_seating_grid():
             sync_state_from_disk_if_newer(state)
             cur_roster = get_active_roster(state)
 
-            # 頂部直排編號提示（方便對照 4 大排位置）
             aisle_header_cols = st.columns([1, 1, 0.14, 1, 1, 0.14, 1, 1, 0.14, 1, 1], gap="small")
             for group_idx, col_pos in enumerate([0, 3, 6, 9]):
                 with aisle_header_cols[col_pos]:
@@ -1397,21 +1565,18 @@ if st.session_state.view_mode == "admin":
                     )
 
             for row_idx in range(7, -1, -1):
-                # 8 個座位 + 3 條走道分隔線（2 - 走道 - 2 - 走道 - 2 - 走道 - 2）
                 row_cols = st.columns([1, 1, 0.14, 1, 1, 0.14, 1, 1, 0.14, 1, 1], gap="small")
 
-                # 在第 2、4、6 位同學右側畫上垂直走道區隔線
                 for div_pos in (2, 5, 8):
                     with row_cols[div_pos]:
                         st.markdown(
-                            '<div style="display:flex; justify-content:center; height:158px;">'
+                            '<div style="display:flex; justify-content:center; height:172px;">'
                             '<div style="width:2.5px; height:100%; background:repeating-linear-gradient(to bottom, #94a3b8 0, #94a3b8 7px, transparent 7px, transparent 13px); border-radius:2px;"></div>'
                             '</div>',
                             unsafe_allow_html=True,
                         )
 
                 for col_idx in range(8):
-                    # 將 0~7 的座位索引對應到含走道的欄位索引（0,1 | 3,4 | 6,7 | 9,10）
                     target_col_idx = col_idx + (col_idx // 2)
                     seat_int = row_idx * 8 + col_idx + 1
                     seat_str = f"{seat_int:02d}"
@@ -1422,14 +1587,16 @@ if st.session_state.view_mode == "admin":
                         if stu_info:
                             cls_label = stu_info.get("class_name", "") or "　"
                             name_label = stu_info.get("name", "") or "未命名"
+                            sem_total = int(stu_info.get("semester_total", 0))
                             card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-box"
                             score_badge_bg = "#d97706" if cur_score > 0 else "#64748b"
                             st.markdown(
                                 f'<div class="{card_cls}">'
-                                f'<div style="font-size:0.74rem; font-weight:400; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{cls_label}</div>'
-                                f'<div style="font-size:1.3rem; font-weight:500; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
-                                f'<div style="font-size:0.98rem; font-weight:500; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{name_label}</div>'
-                                f'<div style="margin-top:6px;"><span style="background:{score_badge_bg}; color:#ffffff; font-size:0.95rem; font-weight:800; padding:3px 12px; border-radius:999px; display:inline-block;">⭐ {cur_score} 分</span></div>'
+                                f'<div style="font-size:0.72rem; font-weight:400; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{cls_label}</div>'
+                                f'<div style="font-size:1.25rem; font-weight:500; color:#0f172a; line-height:1.12; margin:1px 0;">{seat_str}</div>'
+                                f'<div style="font-size:0.96rem; font-weight:500; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{name_label}</div>'
+                                f'<div style="margin-top:5px;"><span style="background:{score_badge_bg}; color:#ffffff; font-size:0.88rem; font-weight:800; padding:2px 10px; border-radius:999px; display:inline-block;">今日 {cur_score} 分</span></div>'
+                                f'<div style="font-size:0.72rem; font-weight:700; color:#059669; margin-top:3px;">學期累計 {sem_total} 分</div>'
                                 f'</div>',
                                 unsafe_allow_html=True,
                             )
@@ -1440,7 +1607,7 @@ if st.session_state.view_mode == "admin":
                                     key=f"seat_add_{seat_str}",
                                     use_container_width=True,
                                     type="secondary",
-                                    help=f"{seat_str} {name_label} +1 分",
+                                    help=f"{seat_str} {name_label} 今日 +1 分",
                                     on_click=adjust_seat_score,
                                     args=(seat_str, 1, True),
                                 )
@@ -1450,7 +1617,7 @@ if st.session_state.view_mode == "admin":
                                     key=f"seat_sub_{seat_str}",
                                     use_container_width=True,
                                     disabled=(cur_score == 0),
-                                    help=f"{seat_str} {name_label} -1 分",
+                                    help=f"{seat_str} {name_label} 今日 -1 分",
                                     on_click=adjust_seat_score,
                                     args=(seat_str, -1, True),
                                 )
@@ -1461,7 +1628,7 @@ if st.session_state.view_mode == "admin":
                                     f'<div class="{card_cls}">'
                                     f'<div style="font-size:0.72rem; font-weight:400; color:#64748b;">空位 / 未建檔</div>'
                                     f'<div style="font-size:1.3rem; font-weight:500; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
-                                    f'<div style="margin-top:6px;"><span style="background:#d97706; color:#ffffff; font-size:0.95rem; font-weight:800; padding:3px 12px; border-radius:999px; display:inline-block;">⭐ {cur_score} 分</span></div>'
+                                    f'<div style="margin-top:6px;"><span style="background:#d97706; color:#ffffff; font-size:0.9rem; font-weight:800; padding:3px 10px; border-radius:999px; display:inline-block;">今日 {cur_score} 分</span></div>'
                                     f'</div>',
                                     unsafe_allow_html=True,
                                 )
@@ -1476,7 +1643,7 @@ if st.session_state.view_mode == "admin":
                                     "➕",
                                     key=f"seat_empty_add_{seat_str}",
                                     use_container_width=True,
-                                    help=f"{seat_str} +1 分",
+                                    help=f"{seat_str} 今日 +1 分",
                                     on_click=adjust_seat_score,
                                     args=(seat_str, 1, True),
                                 )
@@ -1486,7 +1653,7 @@ if st.session_state.view_mode == "admin":
                                     key=f"seat_empty_sub_{seat_str}",
                                     use_container_width=True,
                                     disabled=(cur_score == 0),
-                                    help=f"{seat_str} -1 分",
+                                    help=f"{seat_str} 今日 -1 分",
                                     on_click=adjust_seat_score,
                                     args=(seat_str, -1, True),
                                 )
@@ -1644,7 +1811,7 @@ if st.session_state.view_mode == "admin":
                             cur_pts = state["scores"].get(num, 0)
                             pts_tag = f' · <b style="color:#4f46e5;">{cur_pts}分</b>' if cur_pts > 0 else ""
                             st.markdown(
-                                f'<div class="{card_cls}"><div class="candidate-num">{num}</div>{badge_html}<div style="font-size:0.72rem; color:#64748b; margin-top:3px;">累計{pts_tag if pts_tag else " 0分"}</div></div>',
+                                f'<div class="{card_cls}"><div class="candidate-num">{num}</div>{badge_html}<div style="font-size:0.72rem; color:#64748b; margin-top:3px;">今日{pts_tag if pts_tag else " 0分"}</div></div>',
                                 unsafe_allow_html=True,
                             )
 
@@ -1761,7 +1928,7 @@ if st.session_state.view_mode == "admin":
         def live_admin_scoreboard_card():
             sync_state_from_disk_if_newer(state)
             with st.container(border=True):
-                st.markdown("#### 🏆 課堂即時記分板")
+                st.markdown("#### 🏆 今日即時記分板")
 
                 sort_c1, sort_c2 = st.columns(2)
                 with sort_c1:
@@ -1788,7 +1955,7 @@ if st.session_state.view_mode == "admin":
 
                 if not score_items:
                     st.markdown(
-                        '<div style="padding:14px 12px; border-radius:12px; background:#f8fafc; border:1px dashed #cbd5e1; color:#94a3b8; font-size:0.88rem; text-align:center; margin-top:6px;">尚無得分紀錄（抽中同學並給分後將自動顯示於此）</div>',
+                        '<div style="padding:14px 12px; border-radius:12px; background:#f8fafc; border:1px dashed #cbd5e1; color:#94a3b8; font-size:0.88rem; text-align:center; margin-top:6px;">今日尚無得分紀錄（抽中同學或於座次表加分後將顯示於此）</div>',
                         unsafe_allow_html=True,
                     )
                 else:
@@ -1827,7 +1994,7 @@ if st.session_state.view_mode == "admin":
                         )
 
                     st.markdown(
-                        f'<div style="max-height:300px; overflow-y:auto; padding-right:2px;">{"".join(rows_html)}</div>',
+                        f'<div style="max-height:280px; overflow-y:auto; padding-right:2px;">{"".join(rows_html)}</div>',
                         unsafe_allow_html=True,
                     )
 
@@ -1840,9 +2007,9 @@ if st.session_state.view_mode == "admin":
                     today_str = datetime.now().strftime("%Y%m%d")
                     safe_title = "".join(c for c in state["course_title"] if c.isalnum() or c in ("_", "-")) or "課堂成績"
                     st.download_button(
-                        label="📥 下載成績 Excel/CSV（供助教登記）",
+                        label="📥 下載今日得分明細 (.csv)",
                         data=csv_bytes,
-                        file_name=f"{safe_title}_成績表_{today_str}.csv",
+                        file_name=f"{safe_title}_今日得分_{today_str}.csv",
                         mime="text/csv",
                         use_container_width=True,
                         type="primary",
@@ -1865,16 +2032,16 @@ if st.session_state.view_mode == "admin":
                                     new_val = max(0, state["scores"].get(clean_s, 0) + int(adj_delta))
                                     state["scores"][clean_s] = new_val
                                     save_persisted_state(state)
-                                st.toast(f"已調整 {clean_s} 號分數（目前 {new_val} 分）")
+                                st.toast(f"已調整 {clean_s} 號今日分數（目前 {new_val} 分）")
                                 st.rerun()
 
                     st.divider()
                     confirm_clear_scores = st.checkbox(
-                        "確認要刪除全部記分板紀錄（此動作無法復原）",
+                        "確認要清空今日暫存記分板紀錄",
                         key="confirm_clear_scores_chk",
                     )
                     st.button(
-                        "🗑️ 刪除全部記分板紀錄",
+                        "🗑️ 清空今日暫存記分板紀錄",
                         disabled=not confirm_clear_scores,
                         use_container_width=True,
                         key="clear_all_scores_btn",
@@ -1967,3 +2134,97 @@ if st.session_state.view_mode == "admin":
                     unsafe_allow_html=True,
                 )
                 st.caption(f"🔗 學生端網址：`{clean_student_url}`")
+
+# ==========================================
+# 7. 學生手機端 (STUDENT VIEW - 無密碼直接進入)
+# ==========================================
+else:
+    _, stu_col, _ = st.columns([1, 1.45, 1])
+    with stu_col:
+
+        @st.fragment(run_every=2)
+        def live_student_panel():
+            sync_state_from_disk_if_newer(state)
+            cur_round = state["round_id"]
+            is_open = state["is_open"]
+            roster = get_active_roster(state)
+
+            status_badge = (
+                '<div class="status-open">🟢 舉手報名開放中</div>'
+                if is_open
+                else '<div class="status-closed">🔴 本題已截止報名</div>'
+            )
+            st.markdown(
+                f'<div class="student-header">'
+                f'<div style="font-size:0.85rem; opacity:0.85; font-weight:700;">第 {cur_round} 題 · 即時互動搶答</div>'
+                f'<div style="font-size:1.55rem; font-weight:900; margin-top:4px;">{state["course_title"]}</div>'
+                f'{status_badge}'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+            # 若學生已輸入過座號，頂部顯示個人今日分數與學期總加分看板
+            saved_seat = st.session_state.student_saved_num
+            if saved_seat:
+                today_sc = int(state["scores"].get(saved_seat, 0))
+                stu_rec = roster.get(saved_seat, {})
+                stu_nm = stu_rec.get("name", "")
+                sem_sc = int(stu_rec.get("semester_total", 0))
+
+                prev_sc = st.session_state.student_last_known_score
+                if prev_sc is not None and today_sc > prev_sc:
+                    st.session_state.student_score_gain_banner = (today_sc - prev_sc, time.time())
+                st.session_state.student_last_known_score = today_sc
+
+                gain_info = st.session_state.student_score_gain_banner
+                if gain_info and (time.time() - gain_info[1] < 8):
+                    st.success(f"🎉 太棒了！老師剛剛為你加上 **+{gain_info[0]} 分**！")
+
+                st.markdown(
+                    f'<div style="background:#f8fafc; border:2px solid #c7d2fe; border-radius:16px; padding:12px 16px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">'
+                    f'<div><div style="font-size:0.78rem; color:#64748b; font-weight:700;">目前綁定座號</div>'
+                    f'<div style="font-size:1.25rem; font-weight:900; color:#1e1b4b;">{saved_seat} 號 {stu_nm}</div></div>'
+                    f'<div style="text-align:right;">'
+                    f'<div style="background:#4f46e5; color:#ffffff; font-size:0.95rem; font-weight:900; padding:3px 12px; border-radius:999px;">今日 {today_sc} 分</div>'
+                    f'<div style="font-size:0.75rem; font-weight:800; color:#059669; margin-top:4px;">學期累計 {sem_sc} 分</div>'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+
+            with st.container(border=True):
+                raw_seat = st.text_input(
+                    "請輸入你的座號（例如：05 或 12）",
+                    value=st.session_state.student_saved_num,
+                    placeholder="輸入座號後點擊舉手搶答",
+                    max_chars=6,
+                )
+                clean_seat = normalize_seat_num(raw_seat)
+                if clean_seat != st.session_state.student_saved_num:
+                    st.session_state.student_saved_num = clean_seat
+                    st.session_state.student_last_known_score = int(state["scores"].get(clean_seat, 0)) if clean_seat else None
+
+                already_in_pool = bool(clean_seat and clean_seat in state["candidates"])
+                is_winner_now = bool(clean_seat and clean_seat in state.get("last_winners", []))
+
+                if is_winner_now:
+                    st.balloons()
+                    st.success(f"🎉 恭喜 **{clean_seat} 號**！你被老師抽中發言囉！")
+                elif already_in_pool:
+                    st.info(f"🙋 **{clean_seat} 號** 已在「第 {cur_round} 題」舉手名單中，請靜候老師抽籤！")
+                elif not is_open:
+                    st.warning("⏸️ 本題目前暫停舉手報名，請等待老師開啟下一題。")
+                else:
+                    if st.button("🙋‍♂️ 我要舉手搶答！", type="primary", use_container_width=True):
+                        if not clean_seat:
+                            st.error("請先輸入你的座號！")
+                        else:
+                            with state["lock"]:
+                                if not state["is_open"]:
+                                    st.warning("老師剛剛已截止本題報名囉！")
+                                else:
+                                    state["candidates"][clean_seat] = time.time()
+                                    save_persisted_state(state)
+                            st.session_state.submitted_round = cur_round
+                            st.rerun()
+
+        live_student_panel()
