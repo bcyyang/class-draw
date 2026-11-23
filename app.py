@@ -34,7 +34,6 @@ def generate_custom_app_icon():
     # 3. 右上角亮金色加分徽章（象徵 +1 記分）
     bx, by, br = 194, 62, 34
     draw.ellipse([bx - br, by - br, bx + br, by + br], fill="#facc15", outline="#ffffff", width=5)
-    # 繪製加號 "+"
     draw.rectangle([bx - 14, by - 4, bx + 14, by + 4], fill="#0f172a")
     draw.rectangle([bx - 4, by - 14, bx + 4, by + 14], fill="#0f172a")
 
@@ -47,7 +46,7 @@ def generate_custom_app_icon():
 APP_ICON_IMAGE, APP_ICON_B64 = generate_custom_app_icon()
 
 # ==========================================
-# 1. 頁面設定與全域自訂 CSS 樣式（完整保留原始視覺風格）
+# 1. 頁面設定與全域自訂 CSS 樣式
 # ==========================================
 st.set_page_config(
     page_title="課堂搶答記分",
@@ -85,7 +84,7 @@ st.markdown(
         box-shadow: 0 14px 30px rgba(30, 27, 75, 0.22);
         margin-bottom: 14px;
     }
-    /* 聚光燈內部固定高度容器（避免抽籤前後跳動） */
+    /* 聚光燈內部固定高度容器 */
     .spotlight-inner {
         min-height: 248px;
         background: rgba(255, 255, 255, 0.08);
@@ -197,7 +196,7 @@ st.markdown(
         border-radius: 999px;
         margin-top: 10px;
     }
-    /* 2.0 座次表專屬樣式（觸控友善、清楚顯示班級/座號/姓名/總分） */
+    /* 座次表專屬樣式 */
     .seat-card-box {
         border-radius: 14px;
         padding: 8px 6px 6px 6px;
@@ -222,10 +221,10 @@ st.markdown(
         font-weight: 700;
         min-height: 112px;
         display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 4px;
+    /* 座次表專屬樣式（整張座位方格直接作為可點擊按鈕） */
+    div[data-testid="stButton"] button[kind="secondary"].seat-grid-btn,
+    div[data-testid="stButton"] button[kind="primary"].seat-grid-btn {
+        touch-action: manipulation !important;
     }
     .podium-banner {
         background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
@@ -245,7 +244,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 允許雙指自由縮放與上下捲動到底（連點雙擊縮放已由上方 touch-action: manipulation 防護），並注入手機桌面捷徑專屬圖示
+# 注入手機桌面捷徑專屬圖示與自由捲動設定
 components.html(
     f"""
     <script>
@@ -260,7 +259,6 @@ components.html(
             }}
             meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes');
 
-            // 注入手機「加入主畫面 / 桌面捷徑」專用圖示 (iOS Safari 與 Android Chrome)
             const iconDataUrl = "data:image/png;base64,{APP_ICON_B64}";
             const relTypes = ["apple-touch-icon", "apple-touch-icon-precomposed", "icon", "shortcut icon"];
             relTypes.forEach((relName) => {{
@@ -273,7 +271,6 @@ components.html(
                 link.href = iconDataUrl;
             }});
 
-            // 設定 iOS 加入主畫面時的乾淨 App 標題
             let appTitleMeta = doc.querySelector('meta[name="apple-mobile-web-app-title"]');
             if (!appTitleMeta) {{
                 appTitleMeta = doc.createElement('meta');
@@ -290,27 +287,29 @@ components.html(
 )
 
 # ==========================================
-# 2. 全班共用記憶體 + 本機 JSON 持久化狀態
+# 2. 全班共用記憶體 + 本機 JSON 持久化狀態 + GitHub 預設備份讀取
 # ==========================================
 STATE_FILE = "classroom_state.json"
+DEFAULT_BACKUP_FILE = "default_rosters.json"
+DEFAULT_PIN = "1234"
 
 DEFAULT_CLASSROOM_DATA = {
     "course_title": "課堂即時搶答抽籤",
-    "admin_pin": "1234",  # 老師端自訂 PIN 碼（預設 1234，可隨時重設並同步保存）
+    "admin_pin": DEFAULT_PIN,
     "round_id": 1,
     "is_open": True,
-    "candidates": {},      # { "05": timestamp }
-    "picked_history": {},  # { "05": count }
-    "last_winners": [],    # ["05", "18"]
-    "scores": {},          # { "05": 4, "18": 2 } 累計合併總分（搶答 + 座次表）
-    "round_points": 1,     # 本題預設配分
-    "awarded_winners": [], # 本輪已給過分的座號，防止重複誤按
-    "auto_award": True,    # 抽中時是否直接自動給分
-    "active_slot": "slot_1",  # 目前啟用的班級槽位 ("slot_1" | "slot_2" | "slot_3")
-    "rosters": {              # 三個班級獨立名單庫
-        "slot_1": {"label": "班級 1", "students": {}},
-        "slot_2": {"label": "班級 2", "students": {}},
-        "slot_3": {"label": "班級 3", "students": {}},
+    "candidates": {},
+    "picked_history": {},
+    "last_winners": [],
+    "scores": {},
+    "round_points": 1,
+    "awarded_winners": [],
+    "auto_award": True,
+    "active_slot": "slot_1",
+    "rosters": {
+        "slot_1": {"label": "班級 1", "custom_name": "", "students": {}},
+        "slot_2": {"label": "班級 2", "custom_name": "", "students": {}},
+        "slot_3": {"label": "班級 3", "custom_name": "", "students": {}},
     },
 }
 
@@ -323,7 +322,7 @@ def get_active_roster(state_dict: dict) -> dict:
 
 
 def get_slot_display_title(state_dict: dict, slot_key: str) -> str:
-    """組合班級槽位顯示名稱（優先使用老師自訂的班級名稱，否則自動偵測 CSV 班級或預設標籤）"""
+    """組合班級槽位顯示名稱"""
     rosters = state_dict.get("rosters", {})
     slot_data = rosters.get(slot_key, {})
     custom_name = slot_data.get("custom_name", "").strip()
@@ -335,7 +334,6 @@ def get_slot_display_title(state_dict: dict, slot_key: str) -> str:
 
     if not students:
         return f"{base_label}（未匯入）"
-    # 統計該名單中最常出現的班級名稱
     class_counts = {}
     for info in students.values():
         cname = info.get("class_name", "").strip()
@@ -345,6 +343,156 @@ def get_slot_display_title(state_dict: dict, slot_key: str) -> str:
     if top_class:
         return f"{base_label}：{top_class}（{len(students)}人）"
     return f"{base_label}（{len(students)}人）"
+
+
+def load_persisted_state() -> dict:
+    """啟動時從磁碟讀取課堂紀錄（若無暫存檔則自動讀取 GitHub 倉庫內的 default_rosters.json）"""
+    data = {
+        k: (json.loads(json.dumps(v)) if isinstance(v, (dict, list)) else v)
+        for k, v in DEFAULT_CLASSROOM_DATA.items()
+    }
+    target_file = STATE_FILE if os.path.exists(STATE_FILE) else (
+        DEFAULT_BACKUP_FILE if os.path.exists(DEFAULT_BACKUP_FILE) else None
+    )
+    if target_file:
+        try:
+            with open(target_file, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+            if isinstance(saved, dict):
+                for k in DEFAULT_CLASSROOM_DATA:
+                    if k in saved:
+                        data[k] = saved[k]
+                if "rosters" not in saved and isinstance(saved.get("roster"), dict) and saved["roster"]:
+                    data["rosters"]["slot_1"]["students"] = saved["roster"]
+        except Exception:
+            pass
+    return data
+
+
+def save_persisted_state(state_dict: dict):
+    """將目前狀態寫入本機 JSON 檔案（供多裝置雙向同步）"""
+    try:
+        serializable = {
+            k: state_dict.get(k, DEFAULT_CLASSROOM_DATA[k])
+            for k in DEFAULT_CLASSROOM_DATA
+        }
+        tmp_file = f"{STATE_FILE}.tmp"
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(serializable, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_file, STATE_FILE)
+        state_dict["_last_disk_mtime"] = os.path.getmtime(STATE_FILE)
+    except Exception:
+        pass
+
+
+def sync_state_from_disk_if_newer(state_dict: dict):
+    """檢查磁碟上的 STATE_FILE 是否被另一台裝置更新，若有則立即同步至記憶體"""
+    if not os.path.exists(STATE_FILE):
+        return
+    try:
+        disk_mtime = os.path.getmtime(STATE_FILE)
+        mem_mtime = state_dict.get("_last_disk_mtime", 0.0)
+        if disk_mtime > mem_mtime + 1e-6:
+            with state_dict["lock"]:
+                with open(STATE_FILE, "r", encoding="utf-8") as f:
+                    saved = json.load(f)
+                if isinstance(saved, dict):
+                    for k in DEFAULT_CLASSROOM_DATA:
+                        if k in saved:
+                            state_dict[k] = saved[k]
+                state_dict["_last_disk_mtime"] = disk_mtime
+    except Exception:
+        pass
+
+
+@st.cache_resource
+def get_shared_classroom_state():
+    """建立全班（所有連線裝置）共用的即時狀態字典與執行緒鎖"""
+    shared = load_persisted_state()
+    shared["lock"] = threading.Lock()
+    shared["_last_disk_mtime"] = os.path.getmtime(STATE_FILE) if os.path.exists(STATE_FILE) else 0.0
+    return shared
+
+
+state = get_shared_classroom_state()
+sync_state_from_disk_if_newer(state)
+
+# ==========================================
+# 3. 瀏覽器 Session State 與網址參數狀態記憶
+# ==========================================
+qp_mode = st.query_params.get("mode", "")
+qp_auth = st.query_params.get("auth", "")
+qp_tab = st.query_params.get("tab", "")
+
+if "view_mode" not in st.session_state:
+    st.session_state.view_mode = "admin" if qp_mode == "admin" else "student"
+if "admin_unlocked" not in st.session_state:
+    st.session_state.admin_unlocked = (qp_mode == "admin" and qp_auth == "1")
+if "admin_tab" not in st.session_state:
+    st.session_state.admin_tab = qp_tab if qp_tab in ("draw", "seating") else "draw"
+if "draw_mode" not in st.session_state:
+    st.session_state.draw_mode = "weighted"
+if "draw_count" not in st.session_state:
+    st.session_state.draw_count = 1
+if "round_points_input" not in st.session_state:
+    st.session_state.round_points_input = int(state.get("round_points", 1))
+if "auto_award_input" not in st.session_state:
+    st.session_state.auto_award_input = bool(state.get("auto_award", True))
+if "scoreboard_sort" not in st.session_state:
+    st.session_state.scoreboard_sort = "score"
+if "history_sort" not in st.session_state:
+    st.session_state.history_sort = "count"
+if "confirm_new_class" not in st.session_state:
+    st.session_state.confirm_new_class = False
+if "sound_enabled" not in st.session_state:
+    st.session_state.sound_enabled = True
+if "student_saved_num" not in st.session_state:
+    st.session_state.student_saved_num = ""
+if "student_last_known_score" not in st.session_state:
+    st.session_state.student_last_known_score = None
+if "student_score_gain_banner" not in st.session_state:
+    st.session_state.student_score_gain_banner = None
+if "submitted_round" not in st.session_state:
+    st.session_state.submitted_round = 0
+if "play_fanfare_once" not in st.session_state:
+    st.session_state.play_fanfare_once = False
+if "student_url_input" not in st.session_state:
+    st.session_state.student_url_input = "https://class-draw.streamlit.app/"
+if "seating_click_mode" not in st.session_state:
+    st.session_state.seating_click_mode = "add"
+if "seating_undo_stack" not in st.session_state:
+    st.session_state.seating_undo_stack = []
+if "uploader_reset_ids" not in st.session_state:
+    st.session_state.uploader_reset_ids = {"slot_1": 0, "slot_2": 0, "slot_3": 0}
+
+
+def build_permanent_backup_json(state_dict: dict) -> bytes:
+    """產生可上傳至 GitHub 倉庫的永久備份檔 default_rosters.json"""
+    backup_payload = {
+        "course_title": state_dict.get("course_title", "課堂即時搶答抽籤"),
+        "admin_pin": state_dict.get("admin_pin", DEFAULT_PIN),
+        "active_slot": state_dict.get("active_slot", "slot_1"),
+        "rosters": state_dict.get("rosters", DEFAULT_CLASSROOM_DATA["rosters"]),
+        "_exported_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    return json.dumps(backup_payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def restore_from_backup_bytes(raw_bytes: bytes):
+    """從備份 JSON 檔還原三班名單與設定"""
+    parsed = json.loads(raw_bytes.decode("utf-8-sig"))
+    if not isinstance(parsed, dict) or "rosters" not in parsed:
+        raise ValueError("備份檔格式不正確，請確認是否為系統匯出的 default_rosters.json。")
+    with state["lock"]:
+        if "rosters" in parsed and isinstance(parsed["rosters"], dict):
+            state["rosters"] = parsed["rosters"]
+        if "active_slot" in parsed:
+            state["active_slot"] = parsed["active_slot"]
+        if "admin_pin" in parsed and str(parsed["admin_pin"]).strip():
+            state["admin_pin"] = str(parsed["admin_pin"]).strip()
+        if "course_title" in parsed and str(parsed["course_title"]).strip():
+            state["course_title"] = str(parsed["course_title"]).strip()
+        save_persisted_state(state)
 
 
 def switch_active_class_slot(slot_key: str):
@@ -366,149 +514,8 @@ def save_slot_custom_name(slot_key: str):
     st.session_state["class_switched_toast"] = f"✏️ 已更新班級名稱為「{new_name or state['rosters'][slot_key]['label']}」"
 
 
-def load_persisted_state() -> dict:
-    """啟動時從磁碟讀取前一次保留的課堂紀錄（若無檔案則回傳預設值）"""
-    data = {
-        k: (json.loads(json.dumps(v)) if isinstance(v, (dict, list)) else v)
-        for k, v in DEFAULT_CLASSROOM_DATA.items()
-    }
-    if os.path.exists(STATE_FILE):
-        try:
-            with open(STATE_FILE, "r", encoding="utf-8") as f:
-                saved = json.load(f)
-            if isinstance(saved, dict):
-                for k in DEFAULT_CLASSROOM_DATA:
-                    if k in saved:
-                        data[k] = saved[k]
-                # 向下相容：若舊存檔只有單一 roster，自動遷移至 slot_1
-                if "rosters" not in saved and isinstance(saved.get("roster"), dict) and saved["roster"]:
-                    data["rosters"]["slot_1"]["students"] = saved["roster"]
-        except Exception:
-            pass
-    return data
-
-
-def save_persisted_state(state_dict: dict):
-    """將最新課堂紀錄安全寫入磁碟（排除不可序列化的 threading.Lock）"""
-    serializable = {k: state_dict[k] for k in DEFAULT_CLASSROOM_DATA if k in state_dict}
-    serializable["_updated_at"] = time.time()
-    tmp_file = f"{STATE_FILE}.tmp"
-    try:
-        with open(tmp_file, "w", encoding="utf-8") as f:
-            json.dump(serializable, f, ensure_ascii=False, indent=2)
-        os.replace(tmp_file, STATE_FILE)
-    except Exception:
-        pass
-
-
-def sync_state_from_disk_if_newer(state_dict: dict):
-    """若磁碟存檔有來自其他裝置或背景程序的新更新，立即同步至目前記憶體"""
-    if not os.path.exists(STATE_FILE):
-        return
-    try:
-        mtime = os.path.getmtime(STATE_FILE)
-        if mtime > state_dict.get("_last_disk_mtime", 0):
-            with open(STATE_FILE, "r", encoding="utf-8") as f:
-                saved = json.load(f)
-            if isinstance(saved, dict):
-                with state_dict["lock"]:
-                    for k in DEFAULT_CLASSROOM_DATA:
-                        if k in saved:
-                            state_dict[k] = saved[k]
-                    state_dict["_last_disk_mtime"] = mtime
-    except Exception:
-        pass
-
-
-@st.cache_resource
-def get_shared_classroom_state():
-    loaded = load_persisted_state()
-    loaded["lock"] = threading.Lock()
-    loaded["_last_disk_mtime"] = os.path.getmtime(STATE_FILE) if os.path.exists(STATE_FILE) else 0
-    return loaded
-
-
-state = get_shared_classroom_state()
-sync_state_from_disk_if_newer(state)
-# 確保舊快取記憶體物件升級時具備新欄位
-if "scores" not in state:
-    state["scores"] = {}
-if "round_points" not in state:
-    state["round_points"] = 1
-if "awarded_winners" not in state:
-    state["awarded_winners"] = []
-if "auto_award" not in state:
-    state["auto_award"] = True
-if "admin_pin" not in state or not str(state["admin_pin"]).strip():
-    state["admin_pin"] = "1234"
-if "active_slot" not in state:
-    state["active_slot"] = "slot_1"
-if "rosters" not in state:
-    old_single = state.get("roster", {}) if isinstance(state.get("roster"), dict) else {}
-    state["rosters"] = {
-        "slot_1": {"label": "班級 1", "students": old_single},
-        "slot_2": {"label": "班級 2", "students": {}},
-        "slot_3": {"label": "班級 3", "students": {}},
-    }
-
-DEFAULT_PIN = "1234"
-
-# ==========================================
-# 3. 個人連線裝置狀態 (st.session_state)
-# ==========================================
-query_mode = st.query_params.get("mode", "")
-query_auth = st.query_params.get("auth", "")
-query_tab = st.query_params.get("tab", "")
-
-if "view_mode" not in st.session_state:
-    st.session_state.view_mode = "admin" if query_mode == "admin" else "student"
-elif query_mode == "admin":
-    st.session_state.view_mode = "admin"
-
-if "admin_unlocked" not in st.session_state:
-    st.session_state.admin_unlocked = (query_auth == "1")
-elif query_auth == "1":
-    st.session_state.admin_unlocked = True
-
-if "admin_tab" not in st.session_state:
-    st.session_state.admin_tab = "seating" if query_tab == "seating" else "draw"  # "draw" (搶答抽籤) | "seating" (全班座次表)
-elif query_tab in ("draw", "seating"):
-    st.session_state.admin_tab = query_tab
-
-if "seating_click_mode" not in st.session_state:
-    st.session_state.seating_click_mode = "add"  # "add" (+1分) | "sub" (-1分)
-if "seating_undo_stack" not in st.session_state:
-    st.session_state.seating_undo_stack = []  # [(seat, delta), ...]
-if "draw_mode" not in st.session_state:
-    st.session_state.draw_mode = "weighted"
-if "draw_count" not in st.session_state:
-    st.session_state.draw_count = 1
-if "student_saved_num" not in st.session_state:
-    st.session_state.student_saved_num = ""
-if "submitted_round" not in st.session_state:
-    st.session_state.submitted_round = 0
-if "student_url_input" not in st.session_state:
-    st.session_state.student_url_input = "https://bcyyang-class-draw.streamlit.app/"
-if "sound_enabled" not in st.session_state:
-    st.session_state.sound_enabled = True
-if "play_fanfare_once" not in st.session_state:
-    st.session_state.play_fanfare_once = False
-if "scoreboard_sort" not in st.session_state:
-    st.session_state.scoreboard_sort = "score"  # "score" 或 "seat"
-if "history_sort" not in st.session_state:
-    st.session_state.history_sort = "count"  # "count" 或 "seat"
-if "confirm_new_class" not in st.session_state:
-    st.session_state.confirm_new_class = False
-if "uploader_reset_ids" not in st.session_state:
-    st.session_state.uploader_reset_ids = {"slot_1": 0, "slot_2": 0, "slot_3": 0}
-if "round_points_input" not in st.session_state:
-    st.session_state.round_points_input = int(state.get("round_points", 1))
-if "auto_award_input" not in st.session_state:
-    st.session_state.auto_award_input = bool(state.get("auto_award", True))
-
-
 def sync_round_points_from_widget():
-    """當老師點擊本題配分的 +/- 號時平滑同步至共用狀態，不需額外強制 rerun"""
+    """同步本題配分"""
     with state["lock"]:
         state["round_points"] = int(st.session_state.round_points_input)
         save_persisted_state(state)
@@ -522,7 +529,7 @@ def sync_auto_award_from_widget():
 
 
 def clear_all_scoreboard_records():
-    """透過 on_click 回呼徹底清空全班記分板座號與分數紀錄"""
+    """清空全班記分板座號與分數紀錄"""
     with state["lock"]:
         state["scores"] = {}
         state["picked_history"] = {}
@@ -550,12 +557,10 @@ def reset_entire_classroom():
 
 
 def open_new_class_confirm():
-    """開啟新課堂二段確認提示框"""
     st.session_state.confirm_new_class = True
 
 
 def close_new_class_confirm():
-    """取消開啟新課堂二段確認提示框"""
     st.session_state.confirm_new_class = False
 
 
@@ -563,7 +568,7 @@ def close_new_class_confirm():
 # 4. 核心演算法、音效、CSV 匯出與座次表輔助函式
 # ==========================================
 def normalize_seat_num(raw_text: str) -> str:
-    """標準化座號格式（例如將 '5' 自動補零成 '05'，統一兩位數流水號）"""
+    """標準化座號格式（例如將 '5' 自動補零成 '05'）"""
     clean = str(raw_text).strip().upper()
     if not clean:
         return ""
@@ -654,7 +659,7 @@ def play_sound_effect(kind="fanfare", enabled=True):
 
 
 def build_scores_csv(scores_dict, history_dict, sort_mode="seat", roster_dict=None):
-    """產生含 UTF-8 BOM 的成績 CSV 資料（僅列出有加分 > 0 的同學，避免 0 分洗版）"""
+    """產生含 UTF-8 BOM 的成績 CSV 資料（座號在第一欄，僅列出有加分 > 0 的同學）"""
     roster = roster_dict or {}
     all_seats = set(scores_dict.keys()) | set(history_dict.keys()) | set(roster.keys())
     items = []
@@ -685,13 +690,12 @@ def build_scores_csv(scores_dict, history_dict, sort_mode="seat", roster_dict=No
     if not items:
         plain_lines.append("（目前尚無任何得分紀錄）")
 
-    # 加上 utf-8-sig (BOM) 讓 Excel 雙擊開啟時中文標題不亂碼
     csv_bytes = output.getvalue().encode("utf-8-sig")
     return csv_bytes, "\n".join(plain_lines)
 
 
 def parse_roster_csv_bytes(raw_bytes: bytes) -> dict:
-    """解析班級名單 CSV（欄位需包含：班級、座號、姓名；自動相容 UTF-8 与 Big5/CP950）"""
+    """解析班級名單 CSV（欄位需包含：班級、座號、姓名；自動相容 UTF-8 與 Big5/CP950）"""
     text = None
     for enc in ("utf-8-sig", "utf-8", "cp950", "big5"):
         try:
@@ -706,7 +710,6 @@ def parse_roster_csv_bytes(raw_bytes: bytes) -> dict:
     if not reader.fieldnames:
         raise ValueError("CSV 檔案內容為空。")
 
-    # 去除欄位名稱前後空白或 BOM
     clean_fields = [f.strip().lstrip("\ufeff") for f in reader.fieldnames if f]
     required = {"班級", "座號", "姓名"}
     if not required.issubset(set(clean_fields)):
@@ -730,7 +733,7 @@ def parse_roster_csv_bytes(raw_bytes: bytes) -> dict:
 
 
 def generate_sample_roster_csv() -> bytes:
-    """產生班級名單 CSV 範本（含班級、座號、姓名三欄）"""
+    """產生班級名單 CSV 範本"""
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(["班級", "座號", "姓名"])
@@ -750,7 +753,7 @@ def generate_sample_roster_csv() -> bytes:
 
 
 def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
-    """點擊座次表時直接加減該生總分（與搶答抽籤總分共用並同步存檔）"""
+    """點擊座次表時直接加減該生總分"""
     with state["lock"]:
         old_val = int(state["scores"].get(seat, 0))
         new_val = max(0, old_val + delta)
@@ -841,12 +844,12 @@ def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, 
 
 
 # ==========================================
-# 5. 頂部精簡視角切換列（縮小高度不佔版面）
+# 5. 頂部精簡視角切換列
 # ==========================================
 nav_col1, nav_col2, nav_col3 = st.columns([8.2, 0.9, 0.9])
 with nav_col1:
     st.markdown(
-        '<div style="font-size:0.78rem; color:#64748b; padding-top:4px;">💡 同網址雙模式：預設為學生端；網址加 <code>?mode=admin</code> 即為老師端</div>',
+        '<div style="font-size:0.78rem; color:#64748b; padding-top:4px;">💡 同網址雙模式：預設為學生端；網址加 <code>?mode=admin</code> 即為老師端 · <span style="background:#e0e7ff; color:#3730a3; font-weight:800; padding:1px 8px; border-radius:999px;">v3.2 永久備份版</span></div>',
         unsafe_allow_html=True,
     )
 with nav_col2:
@@ -905,7 +908,7 @@ if st.session_state.view_mode == "admin":
                     st.success("✅ 密碼已重設為 `1234`，請在上方輸入 `1234` 解鎖！")
         st.stop()
 
-    # --- 頂部課程標題與開題控制列（加寬題次與重置題次按鈕，確保清晰可見） ---
+    # --- 頂部課程標題與開題控制列 ---
     top_c1, top_c2, top_c2_reset, top_c3, top_c4, top_c5, top_c6 = st.columns([2.5, 1.1, 1.1, 1.7, 1.7, 1.3, 1.1])
     with top_c1:
         new_title = st.text_input(
@@ -1003,7 +1006,7 @@ if st.session_state.view_mode == "admin":
                     st.query_params.pop("auth", None)
                     st.rerun()
 
-    # --- 2.0 雙畫面工作區切換 + 三班名單一鍵切換列 ---
+    # --- 雙畫面工作區切換 + 三班名單一鍵切換列 ---
     tab_c1, tab_c2, tab_c3 = st.columns([2.1, 2.2, 5.7])
     with tab_c1:
         if st.button(
@@ -1069,7 +1072,6 @@ if st.session_state.view_mode == "admin":
                     on_click=close_new_class_confirm,
                 )
 
-    # 若剛抽完籤，播放一次勝利和弦音效
     if st.session_state.play_fanfare_once:
         play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
         st.session_state.play_fanfare_once = False
@@ -1095,9 +1097,41 @@ if st.session_state.view_mode == "admin":
         roster = get_active_roster(state)
         cur_slot_key = state.get("active_slot", "slot_1")
 
+        # 0. 最頂端獨立「永久備份與還原」醒目卡片（免展開折疊選單、一眼可見）
+        with st.container(border=True):
+            bk_top1, bk_top2, bk_top3 = st.columns([4.8, 2.8, 2.4])
+            with bk_top1:
+                st.markdown("**🛡️ 永久保存三班名單（防主機休眠清空）**")
+                st.caption("匯入三個班級後，點右側下載 `default_rosters.json` 並上傳至 GitHub 倉庫（與 `app.py` 同層），主機重啟就會自動載入！")
+            with bk_top2:
+                st.download_button(
+                    label="📦 下載三班永久備份檔 (default_rosters.json)",
+                    data=build_permanent_backup_json(state),
+                    file_name="default_rosters.json",
+                    mime="application/json",
+                    type="primary",
+                    use_container_width=True,
+                    key="banner_download_permanent_backup_btn",
+                )
+            with bk_top3:
+                quick_bk_file = st.file_uploader(
+                    "還原 default_rosters.json",
+                    type=["json"],
+                    label_visibility="collapsed",
+                    key="banner_restore_bk_uploader",
+                )
+                if quick_bk_file is not None:
+                    if st.button("✅ 一鍵還原備份檔", type="primary", use_container_width=True, key="banner_confirm_restore_btn"):
+                        try:
+                            restore_from_backup_bytes(quick_bk_file.getvalue())
+                            st.toast("🎉 已成功還原三班名單與設定！")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"還原失敗：{e}")
+
         # 1. 上方操作與 CSV 匯入工具列
         with st.container(border=True):
-            ctrl_c1, ctrl_c2, ctrl_c3, ctrl_c4 = st.columns([2.4, 2.2, 1.8, 3.6])
+            ctrl_c1, ctrl_c2, ctrl_c3, ctrl_c4 = st.columns([2.6, 2.4, 2.0, 3.0])
             with ctrl_c1:
                 if st.button(
                     "➕ 目前模式：點擊座位 +1 分",
@@ -1119,7 +1153,7 @@ if st.session_state.view_mode == "admin":
             with ctrl_c3:
                 undo_len = len(st.session_state.seating_undo_stack)
                 st.button(
-                    f"↩️ 復原上一筆 ({undo_len})" if undo_len > 0 else "↩️ 復原上一筆",
+                    f"↩️ 復原 ({undo_len})" if undo_len > 0 else "↩️ 復原上一筆",
                     disabled=(undo_len == 0),
                     use_container_width=True,
                     key="seating_undo_btn",
@@ -1136,7 +1170,7 @@ if st.session_state.view_mode == "admin":
                 safe_title = "".join(c for c in state["course_title"] if c.isalnum() or c in ("_", "-")) or "課堂成績"
                 slot_short_name = get_slot_display_title(state, cur_slot_key).split("（")[0].replace("：", "_")
                 st.download_button(
-                    label="📥 下載合併總分 Excel/CSV（供助教登記）",
+                    label="📥 下載成績 CSV",
                     data=csv_bytes,
                     file_name=f"{safe_title}_{slot_short_name}_合併成績表_{today_str}.csv",
                     mime="text/csv",
@@ -1144,10 +1178,10 @@ if st.session_state.view_mode == "admin":
                     key="seating_download_csv_btn",
                 )
 
-            with st.expander("📂 管理三個班級的 CSV 名單（分別上傳、永久保存、隨時切換）", expanded=(len(roster) == 0)):
+            with st.expander("📂 管理三個班級的 CSV 名單（分別上傳、永久保存、隨時切換）", expanded=True):
                 info_c1, info_c2 = st.columns([7.5, 2.5])
                 with info_c1:
-                    st.caption("格式說明：CSV 標題列請命名為 **班級、座號、姓名**（共三欄，無需學號）。三個班級各自上傳後會永久保存在系統中，上課時從上方下拉選單切換班級即可。")
+                    st.caption("格式說明：CSV 標題列請命名為 **班級、座號、姓名**（共三欄，無需學號）。三個班級各自上傳後可點擊「📦 下載三班永久備份檔 (default_rosters.json)」存入 GitHub，主機重啟也不會遺失。")
                 with info_c2:
                     st.download_button(
                         label="📄 下載 CSV 範本",
@@ -1169,7 +1203,6 @@ if st.session_state.view_mode == "admin":
                             else:
                                 st.markdown(f"**⚪ {slot_title}**")
 
-                            # 自訂班級名稱輸入框
                             cur_custom = state["rosters"][s_key].get("custom_name", "")
                             st.text_input(
                                 f"班級 {idx + 1} 名稱",
@@ -1227,7 +1260,39 @@ if st.session_state.view_mode == "admin":
                                     st.toast(f"已清除班級 {idx + 1} 名單")
                                     st.rerun()
 
-        # 2. 渲染 8 列 × 8 欄座次表（第 8 排在最上方，第 1 排 01~08 在最下方靠近講台）
+                st.divider()
+                bk_c1, bk_c2 = st.columns([5.2, 4.8])
+                with bk_c1:
+                    st.markdown("**🛡️ 防止主機休眠重置：GitHub 永久備份與還原**")
+                    st.caption("設定完三班名單與密碼後，下載 `default_rosters.json` 並上傳至 GitHub 倉庫（與 `app.py` 同層），日後主機重啟會自動載入！")
+                    st.download_button(
+                        label="📦 下載三班永久備份檔 (default_rosters.json)",
+                        data=build_permanent_backup_json(state),
+                        file_name="default_rosters.json",
+                        mime="application/json",
+                        type="primary",
+                        use_container_width=True,
+                        key="download_permanent_backup_btn",
+                    )
+                with bk_c2:
+                    st.markdown("**📤 從備份檔還原三班名單**")
+                    st.caption("若曾下載過 `default_rosters.json`，可直接在此一秒還原全部班級與密碼：")
+                    bk_file = st.file_uploader(
+                        "上傳 default_rosters.json",
+                        type=["json"],
+                        label_visibility="collapsed",
+                        key="restore_backup_json_uploader",
+                    )
+                    if bk_file is not None:
+                        if st.button("✅ 確認還原此備份檔", type="primary", use_container_width=True, key="confirm_restore_bk_btn"):
+                            try:
+                                restore_from_backup_bytes(bk_file.getvalue())
+                                st.toast("🎉 已成功還原三班名單與設定！")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"還原失敗：{e}")
+
+        # 2. 渲染 8 列 × 8 欄座次表
         if st.session_state.seating_click_mode == "add":
             st.info("👆 **加分模式啟用中**：直接點擊下方任一位同學的座位按鈕，該生總分即 **+1 分**（電腦與手機每 2 秒自動雙向同步）。")
         else:
@@ -1240,7 +1305,35 @@ if st.session_state.view_mode == "admin":
             is_add_mode = st.session_state.seating_click_mode == "add"
             action_delta = 1 if is_add_mode else -1
 
-            # 由最上排（第 8 排：57~64）往下渲染至最下排（第 1 排：01~08）
+            # 注入座次表整格大按鈕樣式（讓方格內多行文字清晰排布、有得分自動高亮）
+            st.markdown(
+                """
+                <style>
+                div[data-testid="stHorizontalBlock"] div[data-testid="stButton"] > button {
+                    min-height: 108px !important;
+                    height: auto !important;
+                    padding: 8px 4px !important;
+                    border-radius: 14px !important;
+                    white-space: pre-line !important;
+                    line-height: 1.32 !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05) !important;
+                }
+                div[data-testid="stHorizontalBlock"] div[data-testid="stButton"] > button p {
+                    font-size: 0.92rem !important;
+                    font-weight: 700 !important;
+                    margin: 0 !important;
+                    white-space: pre-line !important;
+                    text-align: center !important;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+
             for row_idx in range(7, -1, -1):
                 row_cols = st.columns(8, gap="small")
                 for col_idx in range(8):
@@ -1251,66 +1344,41 @@ if st.session_state.view_mode == "admin":
 
                     with row_cols[col_idx]:
                         if stu_info:
-                            cls_label = stu_info.get("class_name", "") or "　"
+                            cls_label = stu_info.get("class_name", "") or "—"
                             name_label = stu_info.get("name", "") or "未命名"
-                            card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-box"
-                            score_badge_bg = "#d97706" if cur_score > 0 else "#64748b"
-                            st.markdown(
-                                f'<div class="{card_cls}">'
-                                f'<div style="font-size:0.74rem; font-weight:400; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{cls_label}</div>'
-                                f'<div style="font-size:1.3rem; font-weight:500; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
-                                f'<div style="font-size:0.98rem; font-weight:500; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{name_label}</div>'
-                                f'<div style="margin-top:6px;"><span style="background:{score_badge_bg}; color:#ffffff; font-size:0.95rem; font-weight:800; padding:3px 12px; border-radius:999px; display:inline-block;">⭐ {cur_score} 分</span></div>'
-                                f'</div>',
-                                unsafe_allow_html=True,
-                            )
-                            btn_text = f"➕ {seat_str} (+1)" if is_add_mode else f"➖ {seat_str} (-1)"
+                            score_line = f"⭐ {cur_score} 分" if cur_score > 0 else "0 分"
+                            card_label = f"{cls_label}\n{seat_str}  {name_label}\n{score_line}"
                             st.button(
-                                btn_text,
+                                card_label,
                                 key=f"seat_click_{seat_str}",
                                 use_container_width=True,
-                                type="primary" if (is_add_mode and cur_score > 0) else "secondary",
+                                type="primary" if cur_score > 0 else "secondary",
                                 on_click=adjust_seat_score,
                                 args=(seat_str, action_delta, True),
                             )
                         else:
-                            # 尚未匯入名單或該座號為空位（仍顯示座號，並支援直接點擊計分）
-                            card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-empty"
                             if cur_score > 0:
-                                st.markdown(
-                                    f'<div class="{card_cls}">'
-                                    f'<div style="font-size:0.72rem; font-weight:400; color:#64748b;">空位 / 未建檔</div>'
-                                    f'<div style="font-size:1.3rem; font-weight:500; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
-                                    f'<div style="margin-top:6px;"><span style="background:#d97706; color:#ffffff; font-size:0.95rem; font-weight:800; padding:3px 12px; border-radius:999px; display:inline-block;">⭐ {cur_score} 分</span></div>'
-                                    f'</div>',
-                                    unsafe_allow_html=True,
-                                )
+                                empty_label = f"空位\n{seat_str}\n⭐ {cur_score} 分"
                             else:
-                                st.markdown(
-                                    f'<div class="seat-card-empty"><div style="font-size:1.15rem; font-weight:500; color:#94a3b8;">{seat_str}</div><div>空位</div></div>',
-                                    unsafe_allow_html=True,
-                                )
-                            btn_text = f"➕ {seat_str}" if is_add_mode else f"➖ {seat_str}"
+                                empty_label = f"{seat_str}\n（空位）"
                             st.button(
-                                btn_text,
+                                empty_label,
                                 key=f"seat_empty_click_{seat_str}",
                                 use_container_width=True,
+                                type="primary" if cur_score > 0 else "secondary",
                                 on_click=adjust_seat_score,
                                 args=(seat_str, action_delta, True),
                             )
 
         live_seating_grid()
-
-        # 最下方正中央講台標示
         st.markdown('<div class="podium-banner">講　　　　台</div>', unsafe_allow_html=True)
         st.stop()
 
     # ========================================================
-    # 分頁 A：🎯 搶答抽籤主控台（完整保留原本雙欄佈局與全部功能）
+    # 分頁 A：🎯 搶答抽籤主控台
     # ========================================================
     left_col, right_col = st.columns([8, 4], gap="large")
 
-    # ---------------- 左側 8 欄：聚光燈 + 給分操作 + 舉手候選名單（每 2 秒局部自動同步） ----------------
     with left_col:
 
         @st.fragment(run_every=2)
@@ -1329,7 +1397,6 @@ if st.session_state.view_mode == "admin":
                 unsafe_allow_html=True,
             )
 
-            # --- 中籤給分操作條（固定高度佔位，抽籤前後畫面不跳動） ---
             current_winners = list(state.get("last_winners", []))
             with st.container(border=True):
                 if current_winners:
@@ -1464,9 +1531,7 @@ if st.session_state.view_mode == "admin":
 
         spotlight_placeholder = live_admin_left_board()
 
-    # ---------------- 右側 4 欄：抽籤規則 + 課堂記分板 + 已發言紀錄 + QR Code ----------------
     with right_col:
-        # 1. 抽籤規則與啟動卡片
         with st.container(border=True):
             st.markdown("#### 🎲 抽籤規則與啟動")
             mode_choice = st.radio(
@@ -1498,20 +1563,31 @@ if st.session_state.view_mode == "admin":
                     step=1,
                     key="round_points_input",
                     on_change=sync_round_points_from_widget,
-                    help="依題目難度設定本題答對可得幾分（例如簡單題 1 分、挑戰題 2~5 分）",
+                    help="依題目難度設定本題答對可得幾分",
                 )
 
-            st.toggle(
+            cur_auto_award = bool(state.get("auto_award", True))
+            new_auto_award = st.toggle(
                 "⚡ 抽中時自動加上本題配分",
-                key="auto_award_input",
-                on_change=sync_auto_award_from_widget,
-                help="開啟後，抽出中籤同學時會立刻將本題配分加入記分板；若答錯可於左側點按扣回",
+                value=cur_auto_award,
             )
+            if new_auto_award != cur_auto_award:
+                with state["lock"]:
+                    state["auto_award"] = new_auto_award
+                    save_persisted_state(state)
+                st.session_state.auto_award_input = new_auto_award
+                st.toast("⚡ 已開啟抽中自動給分" if new_auto_award else "⏸️ 已關閉抽中自動給分（改為手動給分）")
+                st.rerun()
 
-            st.toggle(
+            cur_sound_enabled = bool(st.session_state.get("sound_enabled", True))
+            new_sound_enabled = st.toggle(
                 "🔊 啟用抽籤跳號與中獎音效",
-                key="sound_enabled",
+                value=cur_sound_enabled,
             )
+            if new_sound_enabled != cur_sound_enabled:
+                st.session_state.sound_enabled = new_sound_enabled
+                st.toast("🔊 已開啟抽籤音效" if new_sound_enabled else "🔇 已關閉抽籤音效（靜音模式）")
+                st.rerun()
 
             if st.button("🎰 開始公平抽籤", type="primary", use_container_width=True):
                 current_candidates = dict(state["candidates"])
@@ -1526,9 +1602,10 @@ if st.session_state.view_mode == "admin":
                     )
                     pool_nums = list(current_candidates.keys())
                     pts_val = int(st.session_state.round_points_input)
-                    auto_give = bool(st.session_state.auto_award_input)
+                    auto_give = bool(state.get("auto_award", True))
+                    sound_on = bool(st.session_state.get("sound_enabled", True))
 
-                    play_sound_effect("rolling", enabled=st.session_state.sound_enabled)
+                    play_sound_effect("rolling", enabled=sound_on)
 
                     for _ in range(15):
                         fake_sample = [random.choice(pool_nums) for _ in range(len(winners))]
@@ -1556,10 +1633,9 @@ if st.session_state.view_mode == "admin":
                         state["awarded_winners"] = list(winners) if auto_give else []
                         save_persisted_state(state)
 
-                    st.session_state.play_fanfare_once = True
+                    st.session_state.play_fanfare_once = sound_on
                     st.rerun()
 
-        # 2. 🏆 課堂即時記分板（支援依得分排名 / 依座號排序 + 手動加扣分微調）
         @st.fragment(run_every=2)
         def live_admin_scoreboard_card():
             sync_state_from_disk_if_newer(state)
@@ -1586,7 +1662,6 @@ if st.session_state.view_mode == "admin":
                         st.session_state.scoreboard_sort = "seat"
                         st.rerun()
 
-                # 合併所有出現過的座號（有分數者 + 曾被抽中者）
                 all_seats = set(state["scores"].keys()) | set(state["picked_history"].keys())
                 score_items = [(seat, state["scores"].get(seat, 0)) for seat in all_seats]
 
@@ -1597,13 +1672,10 @@ if st.session_state.view_mode == "admin":
                     )
                 else:
                     if st.session_state.scoreboard_sort == "score":
-                        # 依分數由高到低排序，同分則依座號由小到大
                         score_items.sort(key=lambda x: (-x[1], int(x[0]) if x[0].isdigit() else 9999, x[0]))
                     else:
-                        # 依座號由小到大排序
                         score_items.sort(key=lambda x: (int(x[0]) if x[0].isdigit() else 9999, x[0]))
 
-                    # 計算名次（同分同名次）
                     unique_desc_scores = sorted({sc for _, sc in score_items if sc > 0}, reverse=True)
                     rows_html = []
                     for seat, sc in score_items:
@@ -1638,7 +1710,6 @@ if st.session_state.view_mode == "admin":
                         unsafe_allow_html=True,
                     )
 
-                    # --- 助教成績匯出區 (CSV 下載 + 快速複製文字版) ---
                     csv_bytes, plain_summary = build_scores_csv(
                         state["scores"],
                         state["picked_history"],
@@ -1659,7 +1730,6 @@ if st.session_state.view_mode == "admin":
                     with st.expander("📋 快速複製文字版成績（貼上 LINE / 試算表）"):
                         st.code(plain_summary, language="text")
 
-                # 手動補加 / 扣分微調列
                 with st.expander("✏️ 手動補加 / 扣分微調"):
                     adj_c1, adj_c2, adj_c3 = st.columns([1.4, 1.3, 1.3])
                     with adj_c1:
@@ -1692,7 +1762,6 @@ if st.session_state.view_mode == "admin":
 
         live_admin_scoreboard_card()
 
-        # 3. 本堂課已發言紀錄卡片
         def live_admin_history_card():
             with st.container(border=True):
                 hist_h1, hist_h2 = st.columns([2.6, 1.4])
@@ -1758,7 +1827,6 @@ if st.session_state.view_mode == "admin":
 
         live_admin_history_card()
 
-        # 3. 學生掃碼 QR Code 卡片（移至最下方）
         with st.container(border=True):
             st.markdown("#### 📱 學生手機掃碼加入")
             share_url = st.text_input(
@@ -1783,6 +1851,7 @@ else:
 
         @st.fragment(run_every=2)
         def student_live_panel():
+            sync_state_from_disk_if_newer(state)
             current_round = state["round_id"]
             is_open = state["is_open"]
             already_submitted = st.session_state.submitted_round == current_round
@@ -1807,12 +1876,55 @@ else:
             with st.container(border=True):
                 last_winners = list(state.get("last_winners", []))
                 saved_num = normalize_seat_num(st.session_state.student_saved_num)
-                my_total_score = state.get("scores", {}).get(saved_num, 0) if saved_num else 0
-                pts_this_round = state.get("round_points", 1)
+                my_total_score = int(state.get("scores", {}).get(saved_num, 0)) if saved_num else 0
+                pts_this_round = int(state.get("round_points", 1))
 
+                # 偵測分數是否剛剛增加（支援「抽籤給分」與「座次表直接點座位加分」，學生手機保持靜音不播放音效）
                 if saved_num:
+                    prev_score = st.session_state.student_last_known_score
+                    if prev_score is None:
+                        st.session_state.student_last_known_score = my_total_score
+                    elif my_total_score > prev_score:
+                        gained = my_total_score - prev_score
+                        st.session_state.student_last_known_score = my_total_score
+                        st.session_state.student_score_gain_banner = {
+                            "gained": gained,
+                            "total": my_total_score,
+                            "ts": time.time(),
+                        }
+                    elif my_total_score < prev_score:
+                        st.session_state.student_last_known_score = my_total_score
+
+                # 1. 常駐醒目顯示「目前累積總分」卡片
+                if saved_num:
+                    stu_name_str = get_active_roster(state).get(saved_num, {}).get("name", "")
+                    who_label = f"{saved_num} 號 {stu_name_str}".strip()
                     st.markdown(
-                        f'<div style="text-align:right; margin-bottom:8px;"><span style="background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; font-size:0.85rem; font-weight:900; padding:4px 12px; border-radius:999px;">🏆 {saved_num} 號目前累積：{my_total_score} 分</span></div>',
+                        f"""
+                        <div style="background:linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border:2px solid #818cf8; border-radius:16px; padding:12px 16px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between;">
+                            <div>
+                                <div style="font-size:0.78rem; font-weight:800; color:#4f46e5;">👤 目前登入座號</div>
+                                <div style="font-size:1.25rem; font-weight:900; color:#1e1b4b;">{who_label}</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="font-size:0.78rem; font-weight:800; color:#4f46e5;">🏆 本堂課累積總分</div>
+                                <div style="font-size:1.75rem; font-weight:900; color:#312e81; line-height:1.1;">{my_total_score} <span style="font-size:0.95rem;">分</span></div>
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                # 2. 剛剛獲得加分時的即時回饋橫幅（顯示 12 秒）
+                gain_info = st.session_state.student_score_gain_banner
+                if gain_info and (time.time() - gain_info["ts"] <= 12):
+                    st.markdown(
+                        f"""
+                        <div style="background:linear-gradient(135deg, #10b981 0%, #059669 100%); color:#ffffff; border-radius:16px; padding:14px 16px; margin-bottom:12px; text-align:center; box-shadow:0 8px 20px rgba(16,185,129,0.35); border:2px solid #a7f3d0;">
+                            <div style="font-size:1.2rem; font-weight:900;">⭐ 剛剛獲得 +{gain_info['gained']} 分！</div>
+                            <div style="font-size:0.9rem; font-weight:700; opacity:0.95; margin-top:3px;">目前累積總分已更新為 {gain_info['total']} 分</div>
+                        </div>
+                        """,
                         unsafe_allow_html=True,
                     )
 
@@ -1852,7 +1964,6 @@ else:
                         if st.button("🔄 刷新最新結果", use_container_width=True):
                             st.rerun()
                     with btn_c2:
-                        # 只要本題仍開放報名且該生還在候選名單中，就允許在抽籤前取消舉手（或改輸入座號）
                         can_cancel = is_open and (saved_num in state["candidates"])
                         if can_cancel:
                             if st.button("🙅 取消舉手 / 改號", use_container_width=True):
@@ -1887,6 +1998,7 @@ else:
                                 state["candidates"][clean_num] = time.time()
                                 save_persisted_state(state)
                             st.session_state.student_saved_num = clean_num
+                            st.session_state.student_last_known_score = int(state.get("scores", {}).get(clean_num, 0))
                             st.session_state.submitted_round = current_round
                             st.rerun()
 
