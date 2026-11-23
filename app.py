@@ -298,9 +298,10 @@ components.html(
                     }} catch (e) {{}}
                 }};
 
-                // 產生標準 WAV 音效（雙重備援，確保 Android Chrome 媒體音量通道 100% 出聲）
-                const buildBeepWavUrl = (freqs, durationSec) => {{
+                // 產生手機打字鍵盤敲擊聲 WAV（加分：柔和咔嗒 / 減分：輕巧水滴）
+                const buildKeyTapWavUrl = (isSub) => {{
                     const sampleRate = 22050;
+                    const durationSec = isSub ? 0.032 : 0.022;
                     const totalSamples = Math.floor(sampleRate * durationSec);
                     const buffer = new ArrayBuffer(44 + totalSamples * 2);
                     const view = new DataView(buffer);
@@ -321,13 +322,23 @@ components.html(
                     writeStr(36, 'data');
                     view.setUint32(40, totalSamples * 2, true);
 
-                    const segLen = Math.floor(totalSamples / freqs.length);
+                    // 加分：柔和咔嗒 (920Hz, 雜訊比 0.65) / 減分：輕巧水滴 (680Hz, 雜訊比 0.2)
+                    const baseFreq = isSub ? 680 : 920;
+                    const decay = isSub ? 110 : 165;
+                    const noiseMix = isSub ? 0.2 : 0.65;
+                    let seed = 12345;
+                    const nextRand = () => {{
+                        seed = (seed * 16807) % 2147483647;
+                        return (seed / 2147483647) * 2 - 1;
+                    }};
+
                     for (let i = 0; i < totalSamples; i++) {{
-                        const segIdx = Math.min(freqs.length - 1, Math.floor(i / segLen));
-                        const freq = freqs[segIdx];
-                        const localT = (i % segLen) / segLen;
-                        const env = Math.sin(Math.PI * Math.min(1, localT * 1.1));
-                        const sample = Math.sin(2 * Math.PI * freq * (i / sampleRate)) * env * 0.85;
+                        const t = i / sampleRate;
+                        const env = Math.exp(-t * decay);
+                        const pitchDrop = baseFreq * (1 - t * 18);
+                        const body = Math.sin(2 * Math.PI * Math.max(120, pitchDrop) * t);
+                        const clickNoise = nextRand();
+                        const sample = (body * (1 - noiseMix) + clickNoise * noiseMix) * env * 0.9;
                         view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, sample)) * 32767, true);
                     }}
                     const bytes = new Uint8Array(buffer);
@@ -336,8 +347,8 @@ components.html(
                     return 'data:audio/wav;base64,' + win.btoa(bin);
                 }};
 
-                const addWavUrl = buildBeepWavUrl([987.77, 1318.51], 0.14);
-                const subWavUrl = buildBeepWavUrl([440, 293.66], 0.15);
+                const addWavUrl = buildKeyTapWavUrl(false);
+                const subWavUrl = buildKeyTapWavUrl(true);
 
                 let lastPlayTs = 0;
                 const triggerClickFeedback = (kind) => {{
@@ -362,19 +373,21 @@ components.html(
                         if (p && typeof p.catch === 'function') p.catch(() => {{}});
                     }} catch (err) {{}}
 
-                    // 3. Web Audio API 同步補音（雙保險）
+                    // 3. Web Audio API 同步補音（加分：柔和咔嗒 / 減分：輕巧水滴）
                     try {{
                         if (sharedCtx) {{
                             const osc = sharedCtx.createOscillator();
                             const gain = sharedCtx.createGain();
-                            osc.type = 'triangle';
-                            osc.frequency.setValueAtTime(kind === 'add' ? 1046.5 : 370, sharedCtx.currentTime);
-                            gain.gain.setValueAtTime(0.25, sharedCtx.currentTime);
-                            gain.gain.exponentialRampToValueAtTime(0.001, sharedCtx.currentTime + 0.11);
+                            const dur = kind === 'add' ? 0.022 : 0.032;
+                            osc.type = 'sine';
+                            osc.frequency.setValueAtTime(kind === 'add' ? 920 : 680, sharedCtx.currentTime);
+                            osc.frequency.exponentialRampToValueAtTime(160, sharedCtx.currentTime + dur);
+                            gain.gain.setValueAtTime(0.28, sharedCtx.currentTime);
+                            gain.gain.exponentialRampToValueAtTime(0.001, sharedCtx.currentTime + dur);
                             osc.connect(gain);
                             gain.connect(sharedCtx.destination);
                             osc.start();
-                            osc.stop(sharedCtx.currentTime + 0.11);
+                            osc.stop(sharedCtx.currentTime + dur);
                         }}
                     }} catch (err) {{}}
                 }};
@@ -912,7 +925,7 @@ def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
 
 def play_seating_click_feedback(kind="add"):
     """播放簡短清脆按鍵音效並觸發手機短震動回饋"""
-    freq = 880 if kind == "add" else 420
+    freq = 920 if kind == "add" else 680
     vib_ms = 35 if kind == "add" else 60
     js_code = f"""
     <script>
@@ -930,11 +943,11 @@ def play_seating_click_feedback(kind="add"):
             osc.type = 'sine';
             osc.frequency.setValueAtTime({freq}, ctx.currentTime);
             gain.gain.setValueAtTime(0.18, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.085);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.032);
             osc.connect(gain);
             gain.connect(ctx.destination);
             osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.085);
+            osc.stop(ctx.currentTime + 0.032);
         }} catch (e) {{}}
     }})();
     </script>
