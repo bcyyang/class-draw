@@ -1432,45 +1432,7 @@ if st.session_state.view_mode == "admin":
                     key="seating_download_today_csv_btn",
                 )
 
-            # 展開區 1：檢視本班多週累計成績總表（可直接刪除誤建的日期欄位）
-            if roster and date_cols:
-                with st.expander(f"📋 檢視本班多週累計成績總表（共 {len(roster)} 人 × {len(date_cols)} 堂課）", expanded=False):
-                    table_rows = []
-                    for s_num in sorted(roster.keys(), key=lambda x: (int(x) if x.isdigit() else 9999, x)):
-                        info = roster[s_num]
-                        recs = info.get("records", {})
-                        row_dict = {
-                            "班級": info.get("class_name", ""),
-                            "座號": s_num,
-                            "姓名": info.get("name", ""),
-                            "學期總加分": sum(int(v) for v in recs.values()),
-                        }
-                        for d_col in date_cols:
-                            row_dict[d_col] = int(recs.get(d_col, 0))
-                        table_rows.append(row_dict)
-                    st.dataframe(table_rows, use_container_width=True, hide_index=True)
-
-                    del_c1, del_c2 = st.columns([3.0, 2.0])
-                    with del_c1:
-                        del_target_date = st.selectbox(
-                            "若需刪除某次誤結算的日期欄位，請在此選擇：",
-                            options=date_cols,
-                            key="del_date_col_select",
-                        )
-                    with del_c2:
-                        st.markdown("<div style='padding-top:26px;'></div>", unsafe_allow_html=True)
-                        if st.button("🗑️ 刪除此日期欄位並重算總分", use_container_width=True, key="del_date_col_btn"):
-                            with state["lock"]:
-                                if del_target_date in slot_obj["date_columns"]:
-                                    slot_obj["date_columns"].remove(del_target_date)
-                                for s_info in slot_obj["students"].values():
-                                    s_info.get("records", {}).pop(del_target_date, None)
-                                    s_info["semester_total"] = sum(int(v) for v in s_info.get("records", {}).values())
-                                save_persisted_state(state)
-                            st.toast(f"🗑️ 已移除「{del_target_date}」欄位並重新計算學期總分！")
-                            st.rerun()
-
-            # 展開區 2：管理三個班級的 CSV 名單（支援匯入初次名單 或 匯入上週下載的累計總表接續累計）
+            # 展開區：管理三個班級的 CSV 名單（支援匯入初次名單 或 匯入上週下載的累計總表接續累計）
             with st.expander("📂 管理三個班級的 CSV 名單（匯入初次名單 / 匯入上週累計總表接續累計）", expanded=False):
                 info_c1, info_c2 = st.columns([7.5, 2.5])
                 with info_c1:
