@@ -280,67 +280,134 @@ components.html(
             }}
             appTitleMeta.content = "課堂搶答記分";
 
-            // 綁定零延遲按鍵音效與手機震動（直接在使用者手指觸碰瞬間觸發，避開瀏覽器自動播放封鎖）
-            if (!win.__seatingFeedbackBound) {{
-                win.__seatingFeedbackBound = true;
+            // Android / 手機零延遲按鍵音效與震動強化版（支援跨 iframe 穿透綁定 + 強制喚醒 AudioContext + 雙脈衝震動）
+            if (!win.__seatingFeedbackBoundV3) {
+                win.__seatingFeedbackBoundV3 = true;
+
                 const AudioCtx = win.AudioContext || win.webkitAudioContext;
+                let sharedCtx = null;
 
-                const unlockAudio = () => {{
-                    try {{
-                        if (!win.__sharedAudioCtx && AudioCtx) {{
-                            win.__sharedAudioCtx = new AudioCtx();
-                        }}
-                        if (win.__sharedAudioCtx && win.__sharedAudioCtx.state === 'suspended') {{
-                            win.__sharedAudioCtx.resume();
-                        }}
-                    }} catch (err) {{}}
-                }};
+                const unlockAudioCtx = () => {
+                    try {
+                        if (!sharedCtx && AudioCtx) {
+                            sharedCtx = new AudioCtx();
+                        }
+                        if (sharedCtx && sharedCtx.state === 'suspended') {
+                            sharedCtx.resume();
+                        }
+                    } catch (e) {}
+                };
 
-                const triggerClickFeedback = (kind) => {{
-                    try {{
-                        if (win.navigator && typeof win.navigator.vibrate === 'function') {{
-                            win.navigator.vibrate(kind === 'add' ? 40 : 70);
-                        }}
-                    }} catch (err) {{}}
+                // 產生標準 WAV 音效（雙重備援，確保 Android Chrome 媒體音量通道 100% 出聲）
+                const buildBeepWavUrl = (freqs, durationSec) => {
+                    const sampleRate = 22050;
+                    const totalSamples = Math.floor(sampleRate * durationSec);
+                    const buffer = new ArrayBuffer(44 + totalSamples * 2);
+                    const view = new DataView(buffer);
+                    const writeStr = (offset, str) => {
+                        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+                    };
+                    writeStr(0, 'RIFF');
+                    view.setUint32(4, 36 + totalSamples * 2, true);
+                    writeStr(8, 'WAVE');
+                    writeStr(12, 'fmt ');
+                    view.setUint32(16, 16, true);
+                    view.setUint16(20, 1, true);
+                    view.setUint16(22, 1, true);
+                    view.setUint32(24, sampleRate, true);
+                    view.setUint32(28, sampleRate * 2, true);
+                    view.setUint16(32, 2, true);
+                    view.setUint16(34, 16, true);
+                    writeStr(36, 'data');
+                    view.setUint32(40, totalSamples * 2, true);
 
-                    try {{
-                        unlockAudio();
-                        const ctx = win.__sharedAudioCtx;
-                        if (!ctx) return;
-                        const now = ctx.currentTime;
-                        const osc = ctx.createOscillator();
-                        const gain = ctx.createGain();
-                        osc.type = 'sine';
-                        if (kind === 'add') {{
-                            osc.frequency.setValueAtTime(880, now);
-                            osc.frequency.exponentialRampToValueAtTime(1174.66, now + 0.075);
-                        }} else {{
-                            osc.frequency.setValueAtTime(440, now);
-                            osc.frequency.exponentialRampToValueAtTime(311.13, now + 0.085);
-                        }}
-                        gain.gain.setValueAtTime(0.24, now);
-                        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.095);
-                        osc.connect(gain);
-                        gain.connect(ctx.destination);
-                        osc.start(now);
-                        osc.stop(now + 0.095);
-                    }} catch (err) {{}}
-                }};
+                    const segLen = Math.floor(totalSamples / freqs.length);
+                    for (let i = 0; i < totalSamples; i++) {
+                        const segIdx = Math.min(freqs.length - 1, Math.floor(i / segLen));
+                        const freq = freqs[segIdx];
+                        const localT = (i % segLen) / segLen;
+                        const env = Math.sin(Math.PI * Math.min(1, localT * 1.1));
+                        const sample = Math.sin(2 * Math.PI * freq * (i / sampleRate)) * env * 0.85;
+                        view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, sample)) * 32767, true);
+                    }
+                    const bytes = new Uint8Array(buffer);
+                    let bin = '';
+                    for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
+                    return 'data:audio/wav;base64,' + win.btoa(bin);
+                };
 
-                doc.addEventListener('pointerdown', (e) => {{
-                    unlockAudio();
+                const addWavUrl = buildBeepWavUrl([987.77, 1318.51], 0.14);
+                const subWavUrl = buildBeepWavUrl([440, 293.66], 0.15);
+
+                let lastPlayTs = 0;
+                const triggerClickFeedback = (kind) => {
+                    const nowTs = Date.now();
+                    if (nowTs - lastPlayTs < 110) return;
+                    lastPlayTs = nowTs;
+
+                    unlockAudioCtx();
+
+                    // 1. Android 清晰雙脈衝震動回饋
+                    try {
+                        if (win.navigator && typeof win.navigator.vibrate === 'function') {
+                            win.navigator.vibrate(kind === 'add' ? [75] : [60, 40, 80]);
+                        }
+                    } catch (err) {}
+
+                    // 2. HTML5 Audio 播放（走 Android 媒體音量通道，每次新建實例避免連點被吞音）
+                    try {
+                        const audioEl = new win.Audio(kind === 'add' ? addWavUrl : subWavUrl);
+                        audioEl.volume = 1.0;
+                        const p = audioEl.play();
+                        if (p && typeof p.catch === 'function') p.catch(() => {});
+                    } catch (err) {}
+
+                    // 3. Web Audio API 同步補音（雙保險）
+                    try {
+                        if (sharedCtx) {
+                            const osc = sharedCtx.createOscillator();
+                            const gain = sharedCtx.createGain();
+                            osc.type = 'triangle';
+                            osc.frequency.setValueAtTime(kind === 'add' ? 1046.5 : 370, sharedCtx.currentTime);
+                            gain.gain.setValueAtTime(0.25, sharedCtx.currentTime);
+                            gain.gain.exponentialRampToValueAtTime(0.001, sharedCtx.currentTime + 0.11);
+                            osc.connect(gain);
+                            gain.connect(sharedCtx.destination);
+                            osc.start();
+                            osc.stop(sharedCtx.currentTime + 0.11);
+                        }
+                    } catch (err) {}
+                };
+
+                const handleUserTap = (e) => {
+                    unlockAudioCtx();
                     const btn = e.target && e.target.closest ? e.target.closest('button') : null;
                     if (!btn || btn.disabled) return;
                     const txt = (btn.innerText || btn.textContent || '').trim();
-                    if (txt === '➕' || txt.startsWith('➕')) {{
+                    if (txt.includes('➕')) {
                         triggerClickFeedback('add');
-                    }} else if (txt === '➖' || txt.startsWith('➖')) {{
+                    } else if (txt.includes('➖')) {
                         triggerClickFeedback('sub');
-                    }}
-                }}, true);
-            }}
-        }} catch (e) {{}}
-    }})();
+                    }
+                };
+
+                const bindToDocument = (targetDoc) => {
+                    if (!targetDoc || targetDoc.__seatingTapAttached) return;
+                    targetDoc.__seatingTapAttached = true;
+                    targetDoc.addEventListener('pointerdown', handleUserTap, { capture: true, passive: true });
+                    targetDoc.addEventListener('touchstart', handleUserTap, { capture: true, passive: true });
+                    targetDoc.addEventListener('click', handleUserTap, true);
+                };
+
+                // 同時綁定主視窗與所有同源子 iframe
+                bindToDocument(doc);
+                const frames = doc.querySelectorAll('iframe');
+                frames.forEach((fr) => {
+                    try { bindToDocument(fr.contentDocument); } catch (e) {}
+                });
+            }
+        } catch (e) {}
+    })();
     </script>
     """,
     height=0,
