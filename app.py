@@ -1370,55 +1370,55 @@ if st.session_state.view_mode == "admin":
                                         state["rosters"][s_key]["students"] = {}
                                         save_persisted_state(state)
                                     st.toast(f"已清除班級 {idx + 1} 名單")
-                                    st.rerun()
-
-                st.divider()
-                bk_c1, bk_c2 = st.columns([5.2, 4.8])
-                with bk_c1:
-                    st.markdown("**🛡️ 永久保存三班名單（防主機休眠清空）**")
-                    st.caption("設定完三班名單與密碼後，下載 `default_rosters.json` 並上傳至 GitHub 倉庫（與 `app.py` 同層），日後主機重啟就會自動載入！")
-                    st.download_button(
-                        label="📦 下載三班永久備份檔 (default_rosters.json)",
-                        data=build_permanent_backup_json(state),
-                        file_name="default_rosters.json",
-                        mime="application/json",
-                        type="primary",
-                        use_container_width=True,
-                        key="download_permanent_backup_btn",
-                    )
-                with bk_c2:
-                    st.markdown("**📤 從備份檔還原三班名單**")
-                    st.caption("若曾下載過 `default_rosters.json`，可直接在此一秒還原全部班級與密碼：")
-                    bk_file = st.file_uploader(
-                        "上傳 default_rosters.json",
-                        type=["json"],
-                        label_visibility="collapsed",
-                        key="restore_backup_json_uploader",
-                    )
-                    if bk_file is not None:
-                        if st.button("✅ 確認還原此備份檔", type="primary", use_container_width=True, key="confirm_restore_bk_btn"):
-                            try:
-                                restore_from_backup_bytes(bk_file.getvalue())
-                                st.toast("🎉 已成功還原三班名單與設定！")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"還原失敗：{e}")
-
-        # 2. 渲染 8 列 × 8 欄座次表（每格下方配置左＋1、右－1 雙按鈕）
+        # 2. 渲染 8 列 × 8 欄座次表（每格下方配置左＋1、右－1 雙按鈕，且每 2 位同學之間加上走道區隔線）
         @st.fragment(run_every=2)
         def live_seating_grid():
             sync_state_from_disk_if_newer(state)
             cur_roster = get_active_roster(state)
 
+            # 頂部直排編號提示（方便對照 4 大排位置）
+            aisle_header_cols = st.columns([1, 1, 0.14, 1, 1, 0.14, 1, 1, 0.14, 1, 1], gap="small")
+            for group_idx, col_pos in enumerate([0, 3, 6, 9]):
+                with aisle_header_cols[col_pos]:
+                    st.markdown(
+                        f'<div style="text-align:center; font-size:0.78rem; font-weight:800; color:#64748b; background:#f1f5f9; border-radius:8px; padding:2px 0; margin-bottom:2px;">第 {group_idx + 1} 排（左）</div>',
+                        unsafe_allow_html=True,
+                    )
+                with aisle_header_cols[col_pos + 1]:
+                    st.markdown(
+                        f'<div style="text-align:center; font-size:0.78rem; font-weight:800; color:#64748b; background:#f1f5f9; border-radius:8px; padding:2px 0; margin-bottom:2px;">第 {group_idx + 1} 排（右）</div>',
+                        unsafe_allow_html=True,
+                    )
+            for div_pos in (2, 5, 8):
+                with aisle_header_cols[div_pos]:
+                    st.markdown(
+                        '<div style="text-align:center; font-size:0.72rem; font-weight:900; color:#94a3b8; padding-top:2px;">走道</div>',
+                        unsafe_allow_html=True,
+                    )
+
             for row_idx in range(7, -1, -1):
-                row_cols = st.columns(8, gap="small")
+                # 8 個座位 + 3 條走道分隔線（2 - 走道 - 2 - 走道 - 2 - 走道 - 2）
+                row_cols = st.columns([1, 1, 0.14, 1, 1, 0.14, 1, 1, 0.14, 1, 1], gap="small")
+
+                # 在第 2、4、6 位同學右側畫上垂直走道區隔線
+                for div_pos in (2, 5, 8):
+                    with row_cols[div_pos]:
+                        st.markdown(
+                            '<div style="display:flex; justify-content:center; height:158px;">'
+                            '<div style="width:2.5px; height:100%; background:repeating-linear-gradient(to bottom, #94a3b8 0, #94a3b8 7px, transparent 7px, transparent 13px); border-radius:2px;"></div>'
+                            '</div>',
+                            unsafe_allow_html=True,
+                        )
+
                 for col_idx in range(8):
+                    # 將 0~7 的座位索引對應到含走道的欄位索引（0,1 | 3,4 | 6,7 | 9,10）
+                    target_col_idx = col_idx + (col_idx // 2)
                     seat_int = row_idx * 8 + col_idx + 1
                     seat_str = f"{seat_int:02d}"
                     stu_info = cur_roster.get(seat_str)
                     cur_score = int(state["scores"].get(seat_str, 0))
 
-                    with row_cols[col_idx]:
+                    with row_cols[target_col_idx]:
                         if stu_info:
                             cls_label = stu_info.get("class_name", "") or "　"
                             name_label = stu_info.get("name", "") or "未命名"
