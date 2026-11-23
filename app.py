@@ -407,6 +407,7 @@ DEFAULT_PIN = "1234"
 DEFAULT_CLASSROOM_DATA = {
     "course_title": "課堂即時搶答抽籤",
     "admin_pin": DEFAULT_PIN,
+    "student_share_url": "https://class-draw-zxzusy7bhdm3mshdzj5yxf.streamlit.app/",
     "round_id": 1,
     "is_open": True,
     "candidates": {},
@@ -568,7 +569,9 @@ if "submitted_round" not in st.session_state:
 if "play_fanfare_once" not in st.session_state:
     st.session_state.play_fanfare_once = False
 if "student_url_input" not in st.session_state:
-    st.session_state.student_url_input = "https://class-draw.streamlit.app/"
+    st.session_state.student_url_input = state.get(
+        "student_share_url", "https://class-draw-zxzusy7bhdm3mshdzj5yxf.streamlit.app/"
+    )
 if "seating_click_mode" not in st.session_state:
     st.session_state.seating_click_mode = "add"
 if "seating_feedback_trigger" not in st.session_state:
@@ -1948,176 +1951,19 @@ if st.session_state.view_mode == "admin":
         with st.container(border=True):
             st.markdown("#### 📱 學生手機掃碼加入")
             share_url = st.text_input(
-                "學生端網址（可貼上你的 Streamlit 公開網址自動更新二維碼）",
+                "學生端網址（自動過濾老師端參數，確保掃碼直接進入學生端）",
                 value=st.session_state.student_url_input,
             )
-            st.session_state.student_url_input = share_url
-            if share_url.strip():
-                qr_b64 = generate_qr_base64(share_url.strip())
+            clean_student_url = share_url.strip().split("?")[0]
+            if clean_student_url != st.session_state.student_url_input:
+                st.session_state.student_url_input = clean_student_url
+                with state["lock"]:
+                    state["student_share_url"] = clean_student_url
+                    save_persisted_state(state)
+            if clean_student_url:
+                qr_b64 = generate_qr_base64(clean_student_url)
                 st.markdown(
                     f'<div style="text-align:center; padding:4px 0;"><img src="data:image/png;base64,{qr_b64}" width="150" style="border-radius:12px; border:1px solid #e2e8f0; padding:6px; background:#fff;"/></div>',
                     unsafe_allow_html=True,
                 )
-
-
-# ==========================================
-# 7. 學生手機端 (STUDENT VIEW)
-# ==========================================
-else:
-    _, stu_col, _ = st.columns([1, 1.4, 1])
-    with stu_col:
-
-        @st.fragment(run_every=2)
-        def student_live_panel():
-            sync_state_from_disk_if_newer(state)
-            current_round = state["round_id"]
-            is_open = state["is_open"]
-            already_submitted = st.session_state.submitted_round == current_round
-
-            status_badge = (
-                '<div class="status-open">● 開放舉手搶答中</div>'
-                if is_open
-                else '<div class="status-closed">● 本題已截止報名</div>'
-            )
-
-            st.markdown(
-                f"""
-                <div class="student-header">
-                    <div style="font-size:0.82rem; font-weight:700; opacity:0.9;">{state['course_title']}</div>
-                    <div style="font-size:2.1rem; font-weight:900; margin-top:4px;">第 {current_round} 題</div>
-                    {status_badge}
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            with st.container(border=True):
-                last_winners = list(state.get("last_winners", []))
-                saved_num = normalize_seat_num(st.session_state.student_saved_num)
-                my_total_score = int(state.get("scores", {}).get(saved_num, 0)) if saved_num else 0
-                pts_this_round = int(state.get("round_points", 1))
-
-                # 偵測分數是否剛剛增加（支援「抽籤給分」與「座次表直接點座位加分」，學生手機保持靜音不播放音效）
-                if saved_num:
-                    prev_score = st.session_state.student_last_known_score
-                    if prev_score is None:
-                        st.session_state.student_last_known_score = my_total_score
-                    elif my_total_score > prev_score:
-                        gained = my_total_score - prev_score
-                        st.session_state.student_last_known_score = my_total_score
-                        st.session_state.student_score_gain_banner = {
-                            "gained": gained,
-                            "total": my_total_score,
-                            "ts": time.time(),
-                        }
-                    elif my_total_score < prev_score:
-                        st.session_state.student_last_known_score = my_total_score
-
-                # 1. 常駐醒目顯示「目前累積總分」卡片
-                if saved_num:
-                    stu_name_str = get_active_roster(state).get(saved_num, {}).get("name", "")
-                    who_label = f"{saved_num} 號 {stu_name_str}".strip()
-                    st.markdown(
-                        f"""
-                        <div style="background:linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border:2px solid #818cf8; border-radius:16px; padding:12px 16px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between;">
-                            <div>
-                                <div style="font-size:0.78rem; font-weight:800; color:#4f46e5;">👤 目前登入座號</div>
-                                <div style="font-size:1.25rem; font-weight:900; color:#1e1b4b;">{who_label}</div>
-                            </div>
-                            <div style="text-align:right;">
-                                <div style="font-size:0.78rem; font-weight:800; color:#4f46e5;">🏆 本堂課累積總分</div>
-                                <div style="font-size:1.75rem; font-weight:900; color:#312e81; line-height:1.1;">{my_total_score} <span style="font-size:0.95rem;">分</span></div>
-                            </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-                # 2. 剛剛獲得加分時的即時回饋橫幅（顯示 12 秒）
-                gain_info = st.session_state.student_score_gain_banner
-                if gain_info and (time.time() - gain_info["ts"] <= 12):
-                    st.markdown(
-                        f"""
-                        <div style="background:linear-gradient(135deg, #10b981 0%, #059669 100%); color:#ffffff; border-radius:16px; padding:14px 16px; margin-bottom:12px; text-align:center; box-shadow:0 8px 20px rgba(16,185,129,0.35); border:2px solid #a7f3d0;">
-                            <div style="font-size:1.2rem; font-weight:900;">⭐ 剛剛獲得 +{gain_info['gained']} 分！</div>
-                            <div style="font-size:0.9rem; font-weight:700; opacity:0.95; margin-top:3px;">目前累積總分已更新為 {gain_info['total']} 分</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-                if already_submitted and saved_num and saved_num in last_winners:
-                    order_num = last_winners.index(saved_num) + 1
-                    got_awarded = saved_num in state.get("awarded_winners", [])
-                    pts_notice = (
-                        f"⭐ 老師已為你加上 {pts_this_round} 分（目前總分 {my_total_score} 分）！"
-                        if got_awarded
-                        else f"本題答對可得 {pts_this_round} 分，請準備回答問題 🎤"
-                    )
-                    st.markdown(
-                        f"""
-                        <div style="background:linear-gradient(135deg, #fde047 0%, #facc15 100%); border:3px solid #eab308; border-radius:20px; padding:24px 16px; text-align:center; color:#0f172a; box-shadow:0 10px 25px rgba(250,204,21,0.35);">
-                            <div style="font-size:2.6rem; line-height:1;">🎉</div>
-                            <div style="display:inline-block; background:#78350f; color:#fef08a; font-size:1.25rem; font-weight:900; padding:6px 20px; border-radius:999px; margin-top:8px;">
-                                第 {order_num} 位發言
-                            </div>
-                            <div style="font-size:1.45rem; font-weight:900; margin-top:10px;">恭喜 {saved_num} 號中籤！</div>
-                            <div style="font-size:0.9rem; font-weight:700; color:#422006; margin-top:6px;">
-                                {pts_notice}
-                            </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-                elif already_submitted:
-                    st.success(f"✅ 已加入第 **{current_round}** 題候選名單！")
-                    st.markdown(f"你的登記座號：**`{saved_num}`**")
-                    if last_winners:
-                        st.warning(f"📢 本輪已抽出座號：**{'、'.join(last_winners)}**（若老師繼續加抽仍有機會喔！）")
-                    else:
-                        st.info("👀 請抬頭看教室大螢幕等待老師抽籤！當老師開啟**下一題**時，此畫面會自動解鎖。")
-
-                    btn_c1, btn_c2 = st.columns(2)
-                    with btn_c1:
-                        if st.button("🔄 刷新最新結果", use_container_width=True):
-                            st.rerun()
-                    with btn_c2:
-                        can_cancel = is_open and (saved_num in state["candidates"])
-                        if can_cancel:
-                            if st.button("🙅 取消舉手 / 改號", use_container_width=True):
-                                with state["lock"]:
-                                    state["candidates"].pop(saved_num, None)
-                                    save_persisted_state(state)
-                                st.session_state.submitted_round = 0
-                                st.toast(f"已取消 {saved_num} 號的舉手申請")
-                                st.rerun()
-                        else:
-                            st.button("🔒 已鎖定名單", disabled=True, use_container_width=True)
-                elif not is_open:
-                    st.warning("⏸️ 本題已截止舉手報名，老師正在進行抽籤或討論中，請等待下一題！")
-                    if st.button("🔄 檢查是否已開啟下一題", use_container_width=True):
-                        st.rerun()
-                else:
-                    num_input = st.text_input(
-                        "請輸入你的座號",
-                        value=st.session_state.student_saved_num,
-                        max_chars=10,
-                        placeholder="例如：05 或 28",
-                    )
-                    st.caption("系統會自動記住你的號碼，下一題免重新輸入")
-                    if st.button("🙋 舉手搶答！送出號碼", type="primary", use_container_width=True):
-                        clean_num = normalize_seat_num(num_input)
-                        if not clean_num:
-                            st.error("請先輸入你的座號！")
-                        elif not state["is_open"]:
-                            st.warning("本題剛剛已截止報名囉！")
-                        else:
-                            with state["lock"]:
-                                state["candidates"][clean_num] = time.time()
-                                save_persisted_state(state)
-                            st.session_state.student_saved_num = clean_num
-                            st.session_state.student_last_known_score = int(state.get("scores", {}).get(clean_num, 0))
-                            st.session_state.submitted_round = current_round
-                            st.rerun()
-
-        student_live_panel()
+                st.caption(f"🔗 學生端網址：`{clean_student_url}`")
