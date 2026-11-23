@@ -183,6 +183,67 @@ st.markdown(
         font-size: 0.82rem;
         font-weight: 900;
         padding: 4px 14px;
+        border-radius: 999px;
+        margin-top: 10px;
+    }
+    .status-closed {
+        display: inline-block;
+        background: #f43f5e;
+        color: #ffffff;
+        font-size: 0.82rem;
+        font-weight: 900;
+        padding: 4px 14px;
+        border-radius: 999px;
+        margin-top: 10px;
+    }
+    /* 座次表專屬樣式 */
+    .seat-card-box {
+        border-radius: 14px;
+        padding: 8px 6px 6px 6px;
+        text-align: center;
+        border: 2px solid #cbd5e1;
+        background: #ffffff;
+        margin-bottom: 4px;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+    }
+    .seat-card-box.has-score {
+        background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+        border-color: #f59e0b;
+    }
+    .seat-card-empty {
+        border-radius: 14px;
+        padding: 18px 6px;
+        text-align: center;
+        border: 1.5px dashed #cbd5e1;
+        background: #f8fafc;
+        color: #94a3b8;
+        font-size: 0.8rem;
+        font-weight: 700;
+        min-height: 112px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 4px;
+    }
+    .podium-banner {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        color: #f8fafc;
+        text-align: center;
+        font-size: 1.15rem;
+        font-weight: 900;
+        letter-spacing: 0.35em;
+        padding: 12px 24px;
+        border-radius: 16px;
+        margin: 14px auto 4px auto;
+        max-width: 480px;
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # 注入手機桌面捷徑專屬圖示、自由捲動設定與「零延遲按鍵音效＋震動監聽器」
 components.html(
     f"""
