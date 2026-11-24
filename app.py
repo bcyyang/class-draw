@@ -284,52 +284,52 @@ components.html(
             appTitleMeta.content = "課堂搶答記分";
 
             // 專屬懸停提示 + 連點原地即時累加浮動氣泡 (+1 -> +2 -> +3)
-            if (!win.__seatingComboBubbleBound) {{
-                win.__seatingComboBubbleBound = true;
+            if (!win.__seatingComboBubbleBoundV2) {
+                win.__seatingComboBubbleBoundV2 = true;
 
-                // 注入浮動計數泡泡與自訂懸停提示樣式
-                if (!doc.getElementById('seating-combo-style')) {{
+                // 注入浮動計數泡泡樣式
+                if (!doc.getElementById('seating-combo-style')) {
                     const stEl = doc.createElement('style');
                     stEl.id = 'seating-combo-style';
                     stEl.textContent = `
-                        #seating-live-combo-pill {{
+                        #seating-live-combo-pill {
                             position: fixed;
-                            z-index: 999999;
+                            z-index: 2147483647;
                             pointer-events: none;
                             transform: translate(-50%, -100%) scale(0.92);
                             background: linear-gradient(135deg, #facc15 0%, #f59e0b 100%);
                             color: #0f172a;
                             border: 2.5px solid #ffffff;
                             border-radius: 999px;
-                            padding: 6px 16px;
-                            font-size: 1.05rem;
+                            padding: 7px 18px;
+                            font-size: 1.12rem;
                             font-weight: 900;
-                            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.28);
+                            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.35);
                             white-space: nowrap;
                             opacity: 0;
                             transition: opacity 0.16s ease, transform 0.14s cubic-bezier(0.22, 1, 0.36, 1);
-                        }}
-                        #seating-live-combo-pill.sub-mode {{
+                        }
+                        #seating-live-combo-pill.sub-mode {
                             background: linear-gradient(135deg, #334155 0%, #0f172a 100%);
                             color: #ffffff;
-                        }}
-                        #seating-live-combo-pill.visible {{
+                        }
+                        #seating-live-combo-pill.visible {
                             opacity: 1;
-                            transform: translate(-50%, -100%) scale(1.06);
-                        }}
+                            transform: translate(-50%, -100%) scale(1.08);
+                        }
                     `;
                     doc.head.appendChild(stEl);
-                }}
+                }
 
-                const getOrCreateEl = (id) => {{
+                const getOrCreateEl = (id) => {
                     let el = doc.getElementById(id);
-                    if (!el) {{
+                    if (!el) {
                         el = doc.createElement('div');
                         el.id = id;
                         doc.body.appendChild(el);
-                    }}
+                    }
                     return el;
-                }};
+                };
 
                 const comboPill = getOrCreateEl('seating-live-combo-pill');
 
@@ -337,8 +337,25 @@ components.html(
                 let comboCount = 0;
                 let comboHideTimer = null;
 
+                // 計算元素相對於最外層視窗 (win) 的真實螢幕座標（支援嵌套 iframe）
+                const getScreenRectInTopWin = (el) => {
+                    let rect = el.getBoundingClientRect();
+                    let curWin = el.ownerDocument.defaultView;
+                    while (curWin && curWin !== win && curWin.frameElement) {
+                        const fRect = curWin.frameElement.getBoundingClientRect();
+                        rect = {
+                            left: rect.left + fRect.left,
+                            top: rect.top + fRect.top,
+                            width: rect.width,
+                            height: rect.height
+                        };
+                        curWin = curWin.parent;
+                    }
+                    return rect;
+                };
+
                 // 直接從按鈕所屬的座位卡片擷取「座號 + 姓名」，完全不依賴 help/title 屬性
-                const inspectSeatingBtn = (btn) => {{
+                const inspectSeatingBtn = (btn) => {
                     if (!btn) return null;
                     const txt = (btn.innerText || btn.textContent || '').trim();
                     if (!txt.includes('➕') && !txt.includes('➖')) return null;
@@ -347,714 +364,77 @@ components.html(
 
                     let studentLabel = '';
                     let cur = btn.parentElement;
-                    for (let i = 0; i < 8 && cur; i++) {{
+                    for (let i = 0; i < 10 && cur; i++) {
                         const card = cur.querySelector('.seat-card-box, .seat-card-empty');
-                        if (card) {{
+                        if (card) {
                             const lines = (card.innerText || '').split('\n').map(s => s.trim()).filter(Boolean);
-                            const seatLine = lines.find(l => /^\d{{2}}$/.test(l)) || '';
+                            const seatLine = lines.find(l => /^\d{2}$/.test(l)) || '';
                             const nameLine = lines.find(l => l !== seatLine && !l.startsWith('今日') && !l.includes('空位') && l.length <= 8 && !/[甲乙丙丁系科班組]/.test(l)) || '';
-                            studentLabel = `${{seatLine}} ${{nameLine}}`.trim();
+                            studentLabel = `${seatLine} ${nameLine}`.trim();
                             break;
-                        }}
+                        }
                         cur = cur.parentElement;
-                    }}
+                    }
                     if (!studentLabel) studentLabel = '同學';
                     const step = txt.includes('➕') ? 1 : -1;
-                    return {{ studentLabel, step }};
-                }};
+                    return { studentLabel, step };
+                };
 
-                const triggerLiveComboBubble = (btn, info) => {{
-                    if (comboStudent === info.studentLabel && comboPill.classList.contains('visible')) {{
+                const triggerLiveComboBubble = (btn, info) => {
+                    if (comboStudent === info.studentLabel && comboPill.classList.contains('visible')) {
                         comboCount += info.step;
-                    }} else {{
+                    } else {
                         comboStudent = info.studentLabel;
                         comboCount = info.step;
-                    }}
+                    }
 
-                    const rect = btn.getBoundingClientRect();
-                    const signText = comboCount > 0 ? `+${{comboCount}} 分` : `${{comboCount}} 分`;
-                    comboPill.textContent = `${{comboStudent}}  ${{signText}}`;
+                    const rect = getScreenRectInTopWin(btn);
+                    const signText = comboCount > 0 ? `+${comboCount} 分` : `${comboCount} 分`;
+                    comboPill.textContent = `${comboStudent}  ${signText}`;
                     comboPill.classList.toggle('sub-mode', comboCount < 0);
                     comboPill.style.left = (rect.left + rect.width / 2) + 'px';
-                    comboPill.style.top = (Math.max(46, rect.top - 8)) + 'px';
+                    comboPill.style.top = (Math.max(54, rect.top - 10)) + 'px';
 
                     comboPill.classList.remove('visible');
                     void comboPill.offsetWidth;
                     comboPill.classList.add('visible');
 
                     if (comboHideTimer) win.clearTimeout(comboHideTimer);
-                    comboHideTimer = win.setTimeout(() => {{
+                    comboHideTimer = win.setTimeout(() => {
                         comboPill.classList.remove('visible');
                         comboStudent = '';
                         comboCount = 0;
-                    }}, 1800);
-                }};
+                    }, 1800);
+                };
 
-                const attachComboToDoc = (targetDoc) => {{
-                    if (!targetDoc || targetDoc.__seatingComboAttached) return;
-                    targetDoc.__seatingComboAttached = true;
+                const attachComboToDoc = (targetDoc) => {
+                    if (!targetDoc || targetDoc.__seatingComboAttachedV2) return;
+                    targetDoc.__seatingComboAttachedV2 = true;
 
-                    targetDoc.addEventListener('click', (e) => {{
+                    targetDoc.addEventListener('pointerdown', (e) => {
+                        if (e.isPrimary === false) return;
                         const btn = e.target && e.target.closest ? e.target.closest('button') : null;
                         if (!btn || btn.disabled) return;
                         const info = inspectSeatingBtn(btn);
-                        if (info) {{
+                        if (info) {
                             triggerLiveComboBubble(btn, info);
-                        }}
-                    }}, true);
-                }};
+                        }
+                    }, true);
+                };
 
                 attachComboToDoc(doc);
-                doc.querySelectorAll('iframe').forEach((fr) => {{
-                    try {{ attachComboToDoc(fr.contentDocument); }} catch (e) {{}}
-                }});
-            }}
-
-            // Android / 手機防雙指誤觸按鍵音效與震動強化版
-            if (!win.__seatingFeedbackBoundV4) {{
-                win.__seatingFeedbackBoundV4 = true;
-
-                const AudioCtx = win.AudioContext || win.webkitAudioContext;
-                let sharedCtx = null;
-
-                const unlockAudioCtx = () => {{
-                    try {{
-                        if (!sharedCtx && AudioCtx) {{
-                            sharedCtx = new AudioCtx();
-                        }}
-                        if (sharedCtx && sharedCtx.state === 'suspended') {{
-                            sharedCtx.resume();
-                        }}
-                    }} catch (e) {{}}
-                }};
-
-                const buildPureBeepWavUrl = (freq) => {{
-                    const sampleRate = 44100;
-                    const durationSec = 0.075;
-                    const totalSamples = Math.floor(sampleRate * durationSec);
-                    const buffer = new ArrayBuffer(44 + totalSamples * 2);
-                    const view = new DataView(buffer);
-                    const writeStr = (offset, str) => {{
-                        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-                    }};
-                    writeStr(0, 'RIFF');
-                    view.setUint32(4, 36 + totalSamples * 2, true);
-                    writeStr(8, 'WAVE');
-                    writeStr(12, 'fmt ');
-                    view.setUint32(16, 16, true);
-                    view.setUint16(20, 1, true);
-                    view.setUint16(22, 1, true);
-                    view.setUint32(24, sampleRate, true);
-                    view.setUint32(28, sampleRate * 2, true);
-                    view.setUint16(32, 2, true);
-                    view.setUint16(34, 16, true);
-                    writeStr(36, 'data');
-                    view.setUint32(40, totalSamples * 2, true);
-
-                    for (let i = 0; i < totalSamples; i++) {{
-                        const t = i / sampleRate;
-                        const fadeIn = Math.min(1, t / 0.006);
-                        const fadeOut = Math.min(1, (durationSec - t) / 0.015);
-                        const sample = Math.sin(2 * Math.PI * freq * t) * fadeIn * fadeOut * 0.65;
-                        view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, sample)) * 32767, true);
-                    }}
-                    const bytes = new Uint8Array(buffer);
-                    let bin = '';
-                    for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
-                    return 'data:audio/wav;base64,' + win.btoa(bin);
-                }};
-
-                const addWavUrl = buildPureBeepWavUrl(1000);
-                const subWavUrl = buildPureBeepWavUrl(520);
-
-                let lastPlayTs = 0;
-                const triggerClickFeedback = (kind) => {{
-                    const nowTs = Date.now();
-                    if (nowTs - lastPlayTs < 110) return;
-                    lastPlayTs = nowTs;
-
-                    unlockAudioCtx();
-
-                    try {{
-                        if (win.navigator && typeof win.navigator.vibrate === 'function') {{
-                            win.navigator.vibrate(kind === 'add' ? [65] : [50, 40, 65]);
-                        }}
-                    }} catch (err) {{}}
-
-                    try {{
-                        const audioEl = new win.Audio(kind === 'add' ? addWavUrl : subWavUrl);
-                        audioEl.volume = 1.0;
-                        const p = audioEl.play();
-                        if (p && typeof p.catch === 'function') p.catch(() => {{}});
-                    }} catch (err) {{}}
-                }};
-
-                // 追蹤多指觸控與滑動距離，避免雙指縮放或滑動捲動時誤發音效
-                let isMultiTouchGesture = false;
-                let lastMultiTouchEndTs = 0;
-                let touchStartPos = null;
-                let touchMovedTooFar = false;
-
-                const onTouchStart = (e) => {{
-                    unlockAudioCtx();
-                    if (e.touches && e.touches.length > 1) {{
-                        isMultiTouchGesture = true;
-                        touchStartPos = null;
-                        return;
-                    }}
-                    if (e.touches && e.touches.length === 1) {{
-                        isMultiTouchGesture = false;
-                        touchMovedTooFar = false;
-                        touchStartPos = {{ x: e.touches[0].clientX, y: e.touches[0].clientY }};
-                    }}
-                }};
-
-                const onTouchMove = (e) => {{
-                    if (e.touches && e.touches.length > 1) {{
-                        isMultiTouchGesture = true;
-                        return;
-                    }}
-                    if (touchStartPos && e.touches && e.touches.length === 1) {{
-                        const dx = Math.abs(e.touches[0].clientX - touchStartPos.x);
-                        const dy = Math.abs(e.touches[0].clientY - touchStartPos.y);
-                        if (dx > 10 || dy > 10) {{
-                            touchMovedTooFar = true;
-                        }}
-                    }}
-                }};
-
-                const onTouchEnd = (e) => {{
-                    if (isMultiTouchGesture) {{
-                        lastMultiTouchEndTs = Date.now();
-                        if (!e.touches || e.touches.length === 0) {{
-                            isMultiTouchGesture = false;
-                        }}
-                    }}
-                }};
-
-                // 僅在真正觸發「單指點擊 (click)」且非滑動/縮放手勢時才播放音效
-                const handleConfirmedClick = (e) => {{
-                    unlockAudioCtx();
-                    if (isMultiTouchGesture || touchMovedTooFar) return;
-                    if (Date.now() - lastMultiTouchEndTs < 350) return;
-
-                    const btn = e.target && e.target.closest ? e.target.closest('button') : null;
-                    if (!btn || btn.disabled) return;
-                    const txt = (btn.innerText || btn.textContent || '').trim();
-                    if (txt.includes('➕')) {{
-                        triggerClickFeedback('add');
-                    }} else if (txt.includes('➖')) {{
-                        triggerClickFeedback('sub');
-                    }}
-                }};
-
-                const bindToDocument = (targetDoc) => {{
-                    if (!targetDoc || targetDoc.__seatingTapAttachedV4) return;
-                    targetDoc.__seatingTapAttachedV4 = true;
-                    targetDoc.addEventListener('touchstart', onTouchStart, {{ capture: true, passive: true }});
-                    targetDoc.addEventListener('touchmove', onTouchMove, {{ capture: true, passive: true }});
-                    targetDoc.addEventListener('touchend', onTouchEnd, {{ capture: true, passive: true }});
-                    targetDoc.addEventListener('touchcancel', onTouchEnd, {{ capture: true, passive: true }});
-                    targetDoc.addEventListener('click', handleConfirmedClick, true);
-                }};
-
-                bindToDocument(doc);
-                const frames = doc.querySelectorAll('iframe');
-                frames.forEach((fr) => {{
-                    try {{ bindToDocument(fr.contentDocument); }} catch (e) {{}}
-                }});
-            }}
-        }} catch (e) {{}}
-    }})();
-    </script>
-    """,
-    height=0,
-    width=0,
-)
-
-# ==========================================
-# 2. 全班共用記憶體 + 本機 JSON 持久化狀態 + 班級累計成績總表結構
-# ==========================================
-STATE_FILE = "classroom_state.json"
-DEFAULT_BACKUP_FILE = "default_rosters.json"
-DEFAULT_PIN = "1234"
-
-DEFAULT_CLASSROOM_DATA = {
-    "course_title": "課堂即時搶答抽籤",
-    "admin_pin": DEFAULT_PIN,
-    "student_share_url": "https://class-draw-zxzusy7bhdm3mshdzj5yxf.streamlit.app/",
-    "round_id": 1,
-    "is_open": True,
-    "candidates": {},
-    "picked_history": {},
-    "last_winners": [],
-    "scores": {},
-    "round_points": 1,
-    "awarded_winners": [],
-    "auto_award": True,
-    "active_slot": "slot_1",
-    "rosters": {
-        "slot_1": {"label": "班級 1", "custom_name": "", "students": {}, "date_columns": []},
-        "slot_2": {"label": "班級 2", "custom_name": "", "students": {}, "date_columns": []},
-        "slot_3": {"label": "班級 3", "custom_name": "", "students": {}, "date_columns": []},
-    },
-}
-
-
-def ensure_slot_schema(slot_data: dict):
-    """確保單一班級槽位具備完整的累計成績結構"""
-    if "students" not in slot_data or not isinstance(slot_data["students"], dict):
-        slot_data["students"] = {}
-    if "date_columns" not in slot_data or not isinstance(slot_data["date_columns"], list):
-        slot_data["date_columns"] = []
-    for seat, info in slot_data["students"].items():
-        if "records" not in info or not isinstance(info["records"], dict):
-            info["records"] = {}
-        # 依據 records 重新計算學期總加分，確保永遠一致
-        info["semester_total"] = sum(int(v) for v in info["records"].values())
-
-
-def get_active_slot_obj(state_dict: dict) -> dict:
-    """取得目前所選班級槽位完整物件"""
-    rosters = state_dict.get("rosters", {})
-    slot = state_dict.get("active_slot", "slot_1")
-    if slot not in rosters:
-        slot = "slot_1"
-    slot_obj = rosters.setdefault(slot, {"label": "班級 1", "custom_name": "", "students": {}, "date_columns": []})
-    ensure_slot_schema(slot_obj)
-    return slot_obj
-
-
-def get_active_roster(state_dict: dict) -> dict:
-    """取得目前所選班級的學生名單字典 {seat: info}"""
-    return get_active_slot_obj(state_dict).get("students", {})
-
-
-def get_slot_display_title(state_dict: dict, slot_key: str) -> str:
-    """組合班級槽位顯示名稱"""
-    rosters = state_dict.get("rosters", {})
-    slot_data = rosters.get(slot_key, {})
-    custom_name = slot_data.get("custom_name", "").strip()
-    base_label = slot_data.get("label", f"班級 {slot_key[-1]}")
-    students = slot_data.get("students", {})
-
-    if custom_name:
-        return f"{custom_name}（{len(students)}人）" if students else f"{custom_name}（未匯入）"
-
-    if not students:
-        return f"{base_label}（未匯入）"
-    class_counts = {}
-    for info in students.values():
-        cname = info.get("class_name", "").strip()
-        if cname:
-            class_counts[cname] = class_counts.get(cname, 0) + 1
-    top_class = max(class_counts.items(), key=lambda x: x[1])[0] if class_counts else ""
-    if top_class:
-        return f"{base_label}：{top_class}（{len(students)}人）"
-    return f"{base_label}（{len(students)}人）"
-
-
-def load_persisted_state() -> dict:
-    """啟動時從磁碟讀取課堂紀錄"""
-    data = {
-        k: (json.loads(json.dumps(v)) if isinstance(v, (dict, list)) else v)
-        for k, v in DEFAULT_CLASSROOM_DATA.items()
-    }
-    target_file = STATE_FILE if os.path.exists(STATE_FILE) else (
-        DEFAULT_BACKUP_FILE if os.path.exists(DEFAULT_BACKUP_FILE) else None
-    )
-    if target_file:
-        try:
-            with open(target_file, "r", encoding="utf-8") as f:
-                saved = json.load(f)
-            if isinstance(saved, dict):
-                for k in DEFAULT_CLASSROOM_DATA:
-                    if k in saved:
-                        data[k] = saved[k]
-                if "rosters" not in saved and isinstance(saved.get("roster"), dict) and saved["roster"]:
-                    data["rosters"]["slot_1"]["students"] = saved["roster"]
-        except Exception:
-            pass
-    for s_key in ("slot_1", "slot_2", "slot_3"):
-        if s_key in data.get("rosters", {}):
-            ensure_slot_schema(data["rosters"][s_key])
-    return data
-
-
-def save_persisted_state(state_dict: dict):
-    """將目前狀態寫入本機 JSON 檔案（供多裝置雙向同步）"""
-    try:
-        serializable = {
-            k: state_dict.get(k, DEFAULT_CLASSROOM_DATA[k])
-            for k in DEFAULT_CLASSROOM_DATA
-        }
-        tmp_file = f"{STATE_FILE}.tmp"
-        with open(tmp_file, "w", encoding="utf-8") as f:
-            json.dump(serializable, f, ensure_ascii=False, indent=2)
-        os.replace(tmp_file, STATE_FILE)
-        state_dict["_last_disk_mtime"] = os.path.getmtime(STATE_FILE)
-    except Exception:
-        pass
-
-
-def sync_state_from_disk_if_newer(state_dict: dict):
-    """檢查磁碟上的 STATE_FILE 是否被另一台裝置更新，若有則立即同步至記憶體"""
-    if not os.path.exists(STATE_FILE):
-        return
-    try:
-        disk_mtime = os.path.getmtime(STATE_FILE)
-        mem_mtime = state_dict.get("_last_disk_mtime", 0.0)
-        if disk_mtime > mem_mtime + 1e-6:
-            with state_dict["lock"]:
-                with open(STATE_FILE, "r", encoding="utf-8") as f:
-                    saved = json.load(f)
-                if isinstance(saved, dict):
-                    for k in DEFAULT_CLASSROOM_DATA:
-                        if k in saved:
-                            state_dict[k] = saved[k]
-                state_dict["_last_disk_mtime"] = disk_mtime
-    except Exception:
-        pass
-
-
-@st.cache_resource
-def get_shared_classroom_state():
-    """建立全班（所有連線裝置）共用的即時狀態字典與執行緒鎖"""
-    shared = load_persisted_state()
-    shared["lock"] = threading.Lock()
-    shared["_last_disk_mtime"] = os.path.getmtime(STATE_FILE) if os.path.exists(STATE_FILE) else 0.0
-    return shared
-
-
-state = get_shared_classroom_state()
-sync_state_from_disk_if_newer(state)
-
-# ==========================================
-# 3. 瀏覽器 Session State 與網址參數狀態記憶
-# ==========================================
-qp_mode = st.query_params.get("mode", "")
-qp_auth = st.query_params.get("auth", "")
-qp_tab = st.query_params.get("tab", "")
-
-if "view_mode" not in st.session_state:
-    st.session_state.view_mode = "admin" if qp_mode == "admin" else "student"
-if "admin_unlocked" not in st.session_state:
-    st.session_state.admin_unlocked = (qp_mode == "admin" and qp_auth == "1")
-if "admin_tab" not in st.session_state:
-    st.session_state.admin_tab = qp_tab if qp_tab in ("draw", "seating") else "draw"
-if "draw_mode" not in st.session_state:
-    st.session_state.draw_mode = "weighted"
-if "draw_count" not in st.session_state:
-    st.session_state.draw_count = 1
-if "round_points_input" not in st.session_state:
-    st.session_state.round_points_input = int(state.get("round_points", 1))
-if "auto_award_input" not in st.session_state:
-    st.session_state.auto_award_input = bool(state.get("auto_award", True))
-if "scoreboard_sort" not in st.session_state:
-    st.session_state.scoreboard_sort = "score"
-if "history_sort" not in st.session_state:
-    st.session_state.history_sort = "count"
-if "confirm_new_class" not in st.session_state:
-    st.session_state.confirm_new_class = False
-if "sound_enabled" not in st.session_state:
-    st.session_state.sound_enabled = True
-if "student_saved_num" not in st.session_state:
-    st.session_state.student_saved_num = ""
-if "student_confirmed_seat" not in st.session_state:
-    st.session_state.student_confirmed_seat = ""
-if "student_pending_confirm_seat" not in st.session_state:
-    st.session_state.student_pending_confirm_seat = ""
-if "student_last_known_score" not in st.session_state:
-    st.session_state.student_last_known_score = None
-if "student_score_gain_banner" not in st.session_state:
-    st.session_state.student_score_gain_banner = None
-if "submitted_round" not in st.session_state:
-    st.session_state.submitted_round = 0
-if "play_fanfare_once" not in st.session_state:
-    st.session_state.play_fanfare_once = False
-if "student_url_input" not in st.session_state:
-    st.session_state.student_url_input = state.get(
-        "student_share_url", "https://class-draw-zxzusy7bhdm3mshdzj5yxf.streamlit.app/"
-    )
-if "seating_feedback_trigger" not in st.session_state:
-    st.session_state.seating_feedback_trigger = None
-if "seating_undo_stack" not in st.session_state:
-    st.session_state.seating_undo_stack = []
-if "seating_combo_tracker" not in st.session_state:
-    st.session_state.seating_combo_tracker = {"seat": "", "delta": 0, "ts": 0.0}
-if "uploader_reset_ids" not in st.session_state:
-    st.session_state.uploader_reset_ids = {"slot_1": 0, "slot_2": 0, "slot_3": 0}
-if "settle_date_label" not in st.session_state:
-    st.session_state.settle_date_label = datetime.now().strftime("%Y/%m/%d")
-
-
-def switch_active_class_slot(slot_key: str):
-    """立即切換目前上課班級槽位並寫入磁碟"""
-    with state["lock"]:
-        state["active_slot"] = slot_key
-        ensure_slot_schema(state["rosters"][slot_key])
-        save_persisted_state(state)
-    st.session_state["class_switched_toast"] = f"📚 已切換至：{get_slot_display_title(state, slot_key)}"
-
-
-def save_slot_custom_name(slot_key: str):
-    """儲存老師自訂的班級名稱"""
-    input_key = f"custom_name_input_{slot_key}"
-    new_name = st.session_state.get(input_key, "").strip()
-    with state["lock"]:
-        if slot_key in state["rosters"]:
-            state["rosters"][slot_key]["custom_name"] = new_name
-            save_persisted_state(state)
-    st.session_state["class_switched_toast"] = f"✏️ 已更新班級名稱為「{new_name or state['rosters'][slot_key]['label']}」"
-
-
-def sync_round_points_from_widget():
-    with state["lock"]:
-        state["round_points"] = int(st.session_state.round_points_input)
-        save_persisted_state(state)
-
-
-def clear_all_scoreboard_records():
-    """清空今日暫存記分板座號與分數紀錄"""
-    with state["lock"]:
-        state["scores"] = {}
-        state["picked_history"] = {}
-        state["awarded_winners"] = []
-        state["last_winners"] = []
-        save_persisted_state(state)
-    st.session_state["confirm_clear_scores_chk"] = False
-    st.session_state["scores_cleared_toast"] = True
-
-
-def reset_entire_classroom():
-    """開啟新課堂：重置今日搶答與暫存得分（保留三班名單與歷史累計總表）"""
-    with state["lock"]:
-        state["round_id"] = 1
-        state["is_open"] = True
-        state["candidates"] = {}
-        state["picked_history"] = {}
-        state["last_winners"] = []
-        state["scores"] = {}
-        state["awarded_winners"] = []
-        save_persisted_state(state)
-    st.session_state.seating_undo_stack = []
-    st.session_state.confirm_new_class = False
-    st.session_state["new_class_toast"] = True
-
-
-def open_new_class_confirm():
-    st.session_state.confirm_new_class = True
-
-
-def close_new_class_confirm():
-    st.session_state.confirm_new_class = False
-
-
-# ==========================================
-# 4. 核心演算法、音效、多週累計總表 CSV 匯入/匯出與結算函式
-# ==========================================
-def normalize_seat_num(raw_text: str) -> str:
-    """標準化座號格式（例如將 '5' 自動補零成 '05'）"""
-    clean = str(raw_text).strip().upper()
-    if not clean:
-        return ""
-    if clean.isdigit() and len(clean) == 1:
-        return f"0{clean}"
-    return clean
-
-
-def settle_today_scores_to_roster(date_label: str, reset_today: bool = True):
-    """將今日課堂得分結算寫入目前班級的累計成績總表，並重新計算學期總加分"""
-    clean_date = date_label.strip() or datetime.now().strftime("%Y/%m/%d")
-    with state["lock"]:
-        slot_obj = get_active_slot_obj(state)
-        students = slot_obj["students"]
-        date_cols = slot_obj["date_columns"]
-        today_scores = state.get("scores", {})
-
-        if not students:
-            return False, "請先匯入本班學生名單，再執行結算！"
-
-        if clean_date not in date_cols:
-            date_cols.append(clean_date)
-
-        settled_count = 0
-        for seat, info in students.items():
-            pts = int(today_scores.get(seat, 0))
-            info.setdefault("records", {})
-            # 累加寫入該日期欄位（若同一天按兩次結算，會自動疊加）
-            info["records"][clean_date] = int(info["records"].get(clean_date, 0)) + pts
-            info["semester_total"] = sum(int(v) for v in info["records"].values())
-            if pts > 0:
-                settled_count += 1
-
-        if reset_today:
-            state["scores"] = {}
-            state["picked_history"] = {}
-            state["awarded_winners"] = []
-            state["last_winners"] = []
-
-        save_persisted_state(state)
-
-    st.session_state.seating_undo_stack = []
-    return True, f"✅ 已將今日成績結算寫入「{clean_date}」欄位（共 {settled_count} 位同學有加分，學期總分已自動更新）！"
-
-
-def build_semester_gradebook_csv(slot_obj: dict, include_today_preview: bool = False, today_scores: dict = None) -> bytes:
-    """產生完整班級多週累計成績總表 CSV（完整保留 01~最大座號 的連續空位行列，方便直接複製貼上對齊正式成績表）"""
-    ensure_slot_schema(slot_obj)
-    students = slot_obj.get("students", {})
-    date_cols = list(slot_obj.get("date_columns", []))
-    today_map = today_scores or {}
-
-    header = ["班級", "座號", "姓名", "學期總加分"] + date_cols
-    if include_today_preview:
-        header.append("今日未結算暫存")
-
-    # 找出所有數字座號（含名單內與今日暫存），建立從 01 到最大座號（至少 64 號或名單上限）的完整連續座號序列
-    numeric_seats = [int(s) for s in (set(students.keys()) | set(today_map.keys())) if str(s).isdigit()]
-    max_seat = max(numeric_seats) if numeric_seats else 64
-    target_max = max(64, max_seat) if max_seat <= 64 else max_seat
-    continuous_seats = [f"{i:02d}" for i in range(1, target_max + 1)]
-
-    non_numeric_seats = sorted([s for s in students.keys() if not str(s).isdigit()])
-    all_ordered_seats = continuous_seats + non_numeric_seats
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(header)
-
-    for seat in all_ordered_seats:
-        info = students.get(seat)
-        if info:
-            records = info.get("records", {})
-            sem_total = sum(int(v) for v in records.values())
-            row = [
-                info.get("class_name", ""),
-                seat,
-                info.get("name", ""),
-                sem_total,
-            ]
-            for d_col in date_cols:
-                row.append(int(records.get(d_col, 0)))
-            if include_today_preview:
-                row.append(int(today_map.get(seat, 0)))
-        else:
-            row = ["", seat, "", ""] + ["" for _ in date_cols]
-            if include_today_preview:
-                today_val = int(today_map.get(seat, 0))
-                row.append(today_val if today_val > 0 else "")
-        writer.writerow(row)
-
-    return output.getvalue().encode("utf-8-sig")
-
-
-def parse_roster_csv_bytes(raw_bytes: bytes) -> tuple[dict, list]:
-    """
-    解析班級名單 CSV：
-    1. 支援初次名單（班級、座號、姓名）
-    2. 支援接續累計總表（班級、座號、姓名、學期總加分、2026/11/23、2026/11/30...）
-    回傳：(parsed_roster_dict, detected_date_columns_list)
-    """
-    text = None
-    for enc in ("utf-8-sig", "utf-8", "cp950", "big5"):
-        try:
-            text = raw_bytes.decode(enc)
-            break
-        except UnicodeDecodeError:
-            continue
-    if text is None:
-        raise ValueError("無法辨識 CSV 檔案編碼，請存為 UTF-8 或 Excel CSV 格式。")
-
-    reader = csv.DictReader(io.StringIO(text))
-    if not reader.fieldnames:
-        raise ValueError("CSV 檔案內容為空。")
-
-    clean_fields = [f.strip().lstrip("\ufeff") for f in reader.fieldnames if f and f.strip()]
-    required = {"班級", "座號", "姓名"}
-    if not required.issubset(set(clean_fields)):
-        raise ValueError(f"CSV 標題列必須包含「班級、座號、姓名」，目前偵測到的欄位為：{', '.join(clean_fields)}")
-
-    ignore_cols = {"班級", "座號", "姓名", "學期總加分", "今日未結算暫存", "本堂課總分", "發言次數"}
-    date_columns = [col for col in clean_fields if col not in ignore_cols]
-
-    parsed_roster = {}
-    for row in reader:
-        clean_row = {(k.strip().lstrip("\ufeff") if k else ""): (v.strip() if v else "") for k, v in row.items()}
-        seat = normalize_seat_num(clean_row.get("座號", ""))
-        if not seat:
-            continue
-        records = {}
-        for d_col in date_columns:
-            raw_val = clean_row.get(d_col, "0")
-            try:
-                records[d_col] = int(float(raw_val)) if raw_val != "" else 0
-            except ValueError:
-                records[d_col] = 0
-
-        parsed_roster[seat] = {
-            "class_name": clean_row.get("班級", ""),
-            "seat": seat,
-            "name": clean_row.get("姓名", ""),
-            "records": records,
-            "semester_total": sum(records.values()),
-        }
-
-    if not parsed_roster:
-        raise ValueError("CSV 檔案中沒有讀取到任何有效的座號資料。")
-    return parsed_roster, date_columns
-
-
-def pick_weighted_candidates(candidates_dict, history_dict, count=1, weighted=True):
-    """公平抽籤演算法：未曾抽中者擁有 3x 優先權重"""
-    pool = list(candidates_dict.keys())
-    selected = []
-    pick_total = min(int(count), len(pool))
-    for _ in range(pick_total):
-        if weighted:
-            weights = [3 if history_dict.get(num, 0) == 0 else 1 for num in pool]
-        else:
-            weights = [1 for _ in pool]
-        chosen = random.choices(pool, weights=weights, k=1)[0]
-        selected.append(chosen)
-        pool.remove(chosen)
-    return selected
-
-
-def generate_qr_base64(url: str) -> str:
-    """產生學生端掃碼 QR Code 圖片 Base64"""
-    qr = qrcode.QRCode(version=1, box_size=8, border=2)
-    qr.add_data(url)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="#0f172a", back_color="#ffffff")
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return base64.b64encode(buf.getvalue()).decode("utf-8")
-
-
-def play_sound_effect(kind="fanfare", enabled=True):
-    """透過 Web Audio API 播放抽籤跳號與中獎音效"""
-    if not enabled:
-        return
-    if kind == "rolling":
-        js_code = """
-        <script>
-        (function() {
-            try {
-                const AudioCtx = window.AudioContext || window.webkitAudioContext;
-                const ctx = new AudioCtx();
-                for (let i = 0; i < 12; i++) {
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(480 + (i % 4) * 95, ctx.currentTime + i * 0.095);
-                    gain.gain.setValueAtTime(0.10, ctx.currentTime + i * 0.095);
-                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.095 + 0.07);
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-                    osc.start(ctx.currentTime + i * 0.095);
-                    osc.stop(ctx.currentTime + i * 0.095 + 0.07);
-                }
+                doc.querySelectorAll('iframe').forEach((fr) => {
+                    try { attachComboToDoc(fr.contentDocument); } catch (e) {}
+                });
+
+                // 持續監聽動態新增的 iframe，確保局部刷新後依然有效
+                const obs = new MutationObserver(() => {
+                    doc.querySelectorAll('iframe').forEach((fr) => {
+                        try { attachComboToDoc(fr.contentDocument); } catch (e) {}
+                    });
+                });
+                obs.observe(doc.body, { childList: true, subtree: true });
+            }
             } catch (e) {}
         })();
         </script>
@@ -1180,20 +560,10 @@ def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
         combo_delta = actual_delta
 
     if actual_delta > 0:
-        if combo_delta > 0:
-            st.session_state["seating_toast_msg"] = f"⭐ {display_who} 本次 +{combo_delta} 分（今日累計 {new_val} 分）"
-        elif combo_delta < 0:
-            st.session_state["seating_toast_msg"] = f"➖ {display_who} 本次 {combo_delta} 分（今日累計 {new_val} 分）"
-        else:
-            st.session_state["seating_toast_msg"] = f"↔️ {display_who} 本次抵銷為 0 分（今日累計 {new_val} 分）"
         st.session_state.seating_feedback_trigger = ("add", time.time())
     elif actual_delta < 0:
-        if combo_delta < 0:
-            st.session_state["seating_toast_msg"] = f"➖ {display_who} 本次 {combo_delta} 分（今日累計 {new_val} 分）"
-        elif combo_delta > 0:
-            st.session_state["seating_toast_msg"] = f"⭐ {display_who} 本次 +{combo_delta} 分（今日累計 {new_val} 分）"
-        else:
-            st.session_state["seating_toast_msg"] = f"↔️ {display_who} 本次抵銷為 0 分（今日累計 {new_val} 分）"
+        st.session_state.seating_feedback_trigger = ("sub", time.time())
+    else:
         st.session_state.seating_feedback_trigger = ("sub", time.time())
     else:
         st.session_state["seating_toast_msg"] = f"ℹ️ {display_who} 今日目前已是 0 分"
