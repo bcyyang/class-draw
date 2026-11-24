@@ -104,7 +104,7 @@ st.markdown(
         border: 3px solid #ffffff;
         border-radius: 22px;
         width: 148px;
-        height: 168px;
+        height: 174px;
         padding: 12px 10px;
         margin: 6px;
         display: inline-flex;
@@ -113,6 +113,7 @@ st.markdown(
         justify-content: space-between;
         box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
         box-sizing: border-box;
+        overflow: hidden;
     }
     /* 抽籤滾動跳號卡片（與中籤卡片等寬等高，確保輪轉到開獎無縫銜接） */
     .rolling-pill {
@@ -121,7 +122,7 @@ st.markdown(
         border: 3px solid rgba(253, 224, 71, 0.78);
         border-radius: 22px;
         width: 148px;
-        height: 168px;
+        height: 174px;
         padding: 12px 10px;
         margin: 6px;
         display: inline-flex;
@@ -129,6 +130,7 @@ st.markdown(
         align-items: center;
         justify-content: space-between;
         box-sizing: border-box;
+        overflow: hidden;
     }
     /* 候選人座號卡片 */
     .candidate-card {
@@ -1201,14 +1203,17 @@ def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, 
         for idx, num in enumerate(winners):
             pills_list.append(
                 f'<div class="rolling-pill">'
-                f'<span style="background:rgba(253,224,71,0.22); color:#fde047; font-size:0.95rem; font-weight:900; padding:3px 16px; border-radius:999px; letter-spacing:0.06em;">第 {idx + 1} 位</span>'
-                f'<span style="font-size:3.2rem; font-weight:900; line-height:1.05; color:#ffffff;">{num}</span>'
-                f'<span style="font-size:0.78rem; font-weight:800; color:#cbd5e1;">抽籤中...</span>'
+                f'<span style="background:rgba(253,224,71,0.22); color:#fde047; font-size:0.95rem; font-weight:900; padding:3px 16px; border-radius:999px; letter-spacing:0.06em; line-height:1.3;">第 {idx + 1} 位</span>'
+                f'<span style="font-size:3.1rem; font-weight:900; line-height:1.05; color:#ffffff;">{num}</span>'
+                f'<div style="height:38px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;">'
+                f'<span style="font-size:0.95rem; font-weight:800; color:#e2e8f0; line-height:1.2;">抽籤中...</span>'
+                f'<span style="background:rgba(255,255,255,0.14); color:#fde047; font-size:0.72rem; font-weight:800; padding:1px 10px; border-radius:999px; line-height:1.3;">配分 {round_points} 分</span>'
+                f'</div>'
                 f'</div>'
             )
         pills = "".join(pills_list)
         inner = (
-            f'<div style="color:#fde047; font-size:0.98rem; font-weight:800; letter-spacing:0.06em; margin-bottom:10px;">'
+            f'<div style="color:#fde047; font-size:0.98rem; font-weight:800; letter-spacing:0.06em; margin-bottom:10px; line-height:1.4;">'
             f'🎰 正在從 {total_pool} 位舉手同學中抽出 {len(winners)} 位...</div>'
             f'<div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:center;">{pills}</div>'
         )
@@ -1217,25 +1222,25 @@ def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, 
         for idx, num in enumerate(winners):
             stu_name = roster.get(num, {}).get("name", "")
             name_html = (
-                f'<span style="font-size:1.02rem; font-weight:900; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:124px;">{stu_name}</span>'
+                f'<span style="font-size:0.95rem; font-weight:900; color:#1e293b; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:124px;">{stu_name}</span>'
                 if stu_name
-                else '<span style="font-size:0.82rem; font-weight:700; color:#78350f;">中籤同學</span>'
+                else '<span style="font-size:0.85rem; font-weight:700; color:#78350f; line-height:1.2;">中籤同學</span>'
             )
             got_pts = (
-                f'<span style="background:#059669; color:#ffffff; font-size:0.74rem; font-weight:900; padding:2px 10px; border-radius:999px;">✓ 已加分</span>'
+                f'<span style="background:#059669; color:#ffffff; font-size:0.72rem; font-weight:900; padding:1px 10px; border-radius:999px; line-height:1.3;">✓ 已加分</span>'
                 if num in awarded_set
-                else f'<span style="background:rgba(15,23,42,0.12); color:#422006; font-size:0.72rem; font-weight:800; padding:2px 10px; border-radius:999px;">待給 {round_points} 分</span>'
+                else f'<span style="background:rgba(15,23,42,0.12); color:#422006; font-size:0.72rem; font-weight:800; padding:1px 10px; border-radius:999px; line-height:1.3;">待給 {round_points} 分</span>'
             )
             pills_list.append(
                 f'<div class="winner-pill">'
-                f'<span style="background:#78350f; color:#fef08a; font-size:0.95rem; font-weight:900; padding:3px 16px; border-radius:999px; letter-spacing:0.06em;">第 {idx + 1} 位</span>'
-                f'<span style="font-size:3.2rem; font-weight:900; line-height:1.05; color:#0f172a;">{num}</span>'
-                f'<div style="display:flex; flex-direction:column; align-items:center; gap:2px;">{name_html}{got_pts}</div>'
+                f'<span style="background:#78350f; color:#fef08a; font-size:0.95rem; font-weight:900; padding:3px 16px; border-radius:999px; letter-spacing:0.06em; line-height:1.3;">第 {idx + 1} 位</span>'
+                f'<span style="font-size:3.1rem; font-weight:900; line-height:1.05; color:#0f172a;">{num}</span>'
+                f'<div style="height:38px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;">{name_html}{got_pts}</div>'
                 f'</div>'
             )
         pills = "".join(pills_list)
         inner = (
-            f'<div style="color:#fde047; font-size:0.98rem; font-weight:800; letter-spacing:0.06em; margin-bottom:10px;">'
+            f'<div style="color:#fde047; font-size:0.98rem; font-weight:800; letter-spacing:0.06em; margin-bottom:10px; line-height:1.4;">'
             f'🎉 恭喜以下 {len(winners)} 位同學獲得發言機會！（本題配分：{round_points} 分）</div>'
             f'<div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:center;">{pills}</div>'
         )
