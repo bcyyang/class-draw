@@ -953,20 +953,20 @@ def play_sound_effect(kind="fanfare", enabled=True):
             } catch (e) {}
         })();
         </script>
-        """
-    components.html(js_code, height=0, width=0)
-
-
-def build_scores_csv(scores_dict, history_dict, sort_mode="seat", roster_dict=None):
-    """產生單堂課即時成績 CSV 資料"""
+def build_scores_csv(scores_dict, history_dict, sort_mode="seat", roster_dict=None, fallback_date_col=""):
+    """產生單堂課即時成績 CSV 資料（若今日分數已歸零但該日期剛結算過，自動從該日期欄位帶出分數）"""
     roster = roster_dict or {}
     all_seats = set(scores_dict.keys()) | set(history_dict.keys()) | set(roster.keys())
+    has_live_scores = any(int(v) > 0 for v in scores_dict.values())
+
     items = []
     for seat in all_seats:
         sc = int(scores_dict.get(seat, 0))
+        info = roster.get(seat, {})
+        if not has_live_scores and fallback_date_col:
+            sc = int(info.get("records", {}).get(fallback_date_col, 0))
         if sc <= 0:
             continue
-        info = roster.get(seat, {})
         cls_name = info.get("class_name", "")
         stu_name = info.get("name", "")
         cnt = int(history_dict.get(seat, 0))
@@ -1537,9 +1537,9 @@ if st.session_state.view_mode == "admin":
                         type="primary",
                         use_container_width=True,
                         key="settle_today_btn",
-                        help="將今日所有同學得分寫入上方日期欄位，自動加總學期總分，並把今日暫存分數歸零",
+                        help="將今日所有同學得分寫入上方日期欄位並更新學期總分（保留今日得分，不會自動歸零）",
                     ):
-                        ok, msg = settle_today_scores_to_roster(st.session_state.settle_date_label, reset_today=True)
+                        ok, msg = settle_today_scores_to_roster(st.session_state.settle_date_label, reset_today=False)
                         if ok:
                             st.toast(msg)
                             st.rerun()
@@ -1548,7 +1548,7 @@ if st.session_state.view_mode == "admin":
                 with settle_c3:
                     semester_csv_bytes = build_semester_gradebook_csv(
                         slot_obj,
-                        include_today_preview=any(v > 0 for v in state["scores"].values()),
+                        include_today_preview=False,
                         today_scores=state["scores"],
                     )
                     today_str = datetime.now().strftime("%Y%m%d")
@@ -1562,11 +1562,13 @@ if st.session_state.view_mode == "admin":
                         key="seating_download_semester_csv_btn",
                     )
                 with settle_c4:
+                    clean_settle_date = st.session_state.settle_date_label.strip() or datetime.now().strftime("%Y/%m/%d")
                     today_csv_bytes, _ = build_scores_csv(
                         state["scores"],
                         state["picked_history"],
                         sort_mode="seat",
                         roster_dict=roster,
+                        fallback_date_col=clean_settle_date,
                     )
                     st.download_button(
                         label="📥 僅下載今日得分明細",
@@ -1575,6 +1577,21 @@ if st.session_state.view_mode == "admin":
                         mime="text/csv",
                         use_container_width=True,
                         key="seating_download_today_csv_btn",
+                    )
+
+                rst_c1, rst_c2 = st.columns([6.8, 3.2])
+                with rst_c1:
+                    confirm_reset_today = st.checkbox(
+                        "確認已結算並下載完成，要將今日暫存分數歸零（準備下一堂課）",
+                        key="confirm_reset_today_scores_chk",
+                    )
+                with rst_c2:
+                    st.button(
+                        "🧹 手動歸零今日分數",
+                        disabled=not confirm_reset_today,
+                        use_container_width=True,
+                        key="manual_reset_today_scores_btn",
+                        on_click=clear_all_scoreboard_records,
                     )
 
                 if date_cols:
