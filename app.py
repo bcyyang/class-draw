@@ -69,12 +69,17 @@ st.markdown(
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
     }
-    /* 讓高度為 0 的隱藏音效 iframe 容器完全不佔用版面間距，杜絕抽籤時畫面跳動 */
+    /* 讓高度為 0 的隱藏音效 iframe 脫離版面流（不佔空間也不觸發瀏覽器休眠音效） */
     div[data-testid="stElementContainer"]:has(iframe[height="0"]) {
-        display: none !important;
+        position: fixed !important;
+        left: -9999px !important;
+        top: 0 !important;
+        width: 1px !important;
+        height: 1px !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
         margin: 0 !important;
         padding: 0 !important;
-        height: 0 !important;
     }
     /* 保留足夠頂部與底部安全距離，避免放大或滑動到底部時被工具列遮擋 */
     .block-container {
@@ -2018,7 +2023,6 @@ if st.session_state.view_mode == "admin":
         spotlight_placeholder = live_admin_left_board()
 
     with right_col:
-        rolling_sound_placeholder = st.empty()
         with st.container(border=True):
             st.markdown("#### 🎲 抽籤規則與啟動")
             mode_choice = st.radio(
@@ -2092,9 +2096,7 @@ if st.session_state.view_mode == "admin":
                     auto_give = bool(state.get("auto_award", True))
                     sound_on = bool(st.session_state.get("sound_enabled", True))
 
-                    rolling_sound_placeholder.empty()
-                    with rolling_sound_placeholder:
-                        play_sound_effect("rolling", enabled=sound_on)
+                    play_sound_effect("rolling", enabled=sound_on)
 
                     for _ in range(15):
                         fake_sample = [random.choice(pool_nums) for _ in range(len(winners))]
