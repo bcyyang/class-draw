@@ -283,6 +283,130 @@ components.html(
             }}
             appTitleMeta.content = "課堂搶答記分";
 
+            // 專屬懸停提示 + 連點原地即時累加浮動氣泡 (+1 -> +2 -> +3)
+            if (!win.__seatingComboBubbleBound) {{
+                win.__seatingComboBubbleBound = true;
+
+                // 注入浮動計數泡泡與自訂懸停提示樣式
+                if (!doc.getElementById('seating-combo-style')) {{
+                    const stEl = doc.createElement('style');
+                    stEl.id = 'seating-combo-style';
+                    stEl.textContent = `
+                        #seating-live-combo-pill {{
+                            position: fixed;
+                            z-index: 999999;
+                            pointer-events: none;
+                            transform: translate(-50%, -100%) scale(0.92);
+                            background: linear-gradient(135deg, #facc15 0%, #f59e0b 100%);
+                            color: #0f172a;
+                            border: 2.5px solid #ffffff;
+                            border-radius: 999px;
+                            padding: 6px 16px;
+                            font-size: 1.05rem;
+                            font-weight: 900;
+                            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.28);
+                            white-space: nowrap;
+                            opacity: 0;
+                            transition: opacity 0.16s ease, transform 0.14s cubic-bezier(0.22, 1, 0.36, 1);
+                        }}
+                        #seating-live-combo-pill.sub-mode {{
+                            background: linear-gradient(135deg, #334155 0%, #0f172a 100%);
+                            color: #ffffff;
+                        }}
+                        #seating-live-combo-pill.visible {{
+                            opacity: 1;
+                            transform: translate(-50%, -100%) scale(1.06);
+                        }}
+                    `;
+                    doc.head.appendChild(stEl);
+                }}
+
+                const getOrCreateEl = (id) => {{
+                    let el = doc.getElementById(id);
+                    if (!el) {{
+                        el = doc.createElement('div');
+                        el.id = id;
+                        doc.body.appendChild(el);
+                    }}
+                    return el;
+                }};
+
+                const comboPill = getOrCreateEl('seating-live-combo-pill');
+
+                let comboStudent = '';
+                let comboCount = 0;
+                let comboHideTimer = null;
+
+                // 從按鈕擷取「座號 + 姓名」並清除原生 title 避免滑鼠懸停彈出提示
+                const inspectSeatingBtn = (btn) => {{
+                    if (!btn) return null;
+                    const txt = (btn.innerText || btn.textContent || '').trim();
+                    if (!txt.includes('➕') && !txt.includes('➖')) return null;
+
+                    const rawTitle = btn.getAttribute('title') || btn.getAttribute('aria-label') || '';
+                    if (rawTitle) {{
+                        btn.dataset.seatingHint = rawTitle;
+                        btn.removeAttribute('title');
+                    }}
+                    const hintText = btn.dataset.seatingHint || '';
+                    const studentLabel = hintText.replace(/今日\s*[+-]\d+\s*分/g, '').trim() || '同學';
+                    const step = txt.includes('➕') ? 1 : -1;
+                    return {{ studentLabel, step }};
+                }};
+
+                const triggerLiveComboBubble = (btn, info) => {{
+                    if (comboStudent === info.studentLabel && comboPill.classList.contains('visible')) {{
+                        comboCount += info.step;
+                    }} else {{
+                        comboStudent = info.studentLabel;
+                        comboCount = info.step;
+                    }}
+
+                    const rect = btn.getBoundingClientRect();
+                    const signText = comboCount > 0 ? `+${{comboCount}} 分` : `${{comboCount}} 分`;
+                    comboPill.textContent = `${{comboStudent}}  ${{signText}}`;
+                    comboPill.classList.toggle('sub-mode', comboCount < 0);
+                    comboPill.style.left = (rect.left + rect.width / 2) + 'px';
+                    comboPill.style.top = (Math.max(46, rect.top - 8)) + 'px';
+
+                    comboPill.classList.remove('visible');
+                    void comboPill.offsetWidth;
+                    comboPill.classList.add('visible');
+
+                    if (comboHideTimer) win.clearTimeout(comboHideTimer);
+                    comboHideTimer = win.setTimeout(() => {{
+                        comboPill.classList.remove('visible');
+                        comboStudent = '';
+                        comboCount = 0;
+                    }}, 1800);
+                }};
+
+                const attachComboToDoc = (targetDoc) => {{
+                    if (!targetDoc || targetDoc.__seatingComboAttached) return;
+                    targetDoc.__seatingComboAttached = true;
+
+                    // 滑鼠經過時靜默剝除原生 title，防止瀏覽器自動顯示 Hover 提示框
+                    targetDoc.addEventListener('pointerover', (e) => {{
+                        const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+                        inspectSeatingBtn(btn);
+                    }}, true);
+
+                    targetDoc.addEventListener('click', (e) => {{
+                        const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+                        if (!btn || btn.disabled) return;
+                        const info = inspectSeatingBtn(btn);
+                        if (info) {{
+                            triggerLiveComboBubble(btn, info);
+                        }}
+                    }}, true);
+                }};
+
+                attachComboToDoc(doc);
+                doc.querySelectorAll('iframe').forEach((fr) => {{
+                    try {{ attachComboToDoc(fr.contentDocument); }} catch (e) {{}}
+                }});
+            }}
+
             // Android / 手機防雙指誤觸按鍵音效與震動強化版
             if (!win.__seatingFeedbackBoundV4) {{
                 win.__seatingFeedbackBoundV4 = true;
