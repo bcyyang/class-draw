@@ -630,6 +630,10 @@ if "sound_enabled" not in st.session_state:
     st.session_state.sound_enabled = True
 if "student_saved_num" not in st.session_state:
     st.session_state.student_saved_num = ""
+if "student_confirmed_seat" not in st.session_state:
+    st.session_state.student_confirmed_seat = ""
+if "student_pending_confirm_seat" not in st.session_state:
+    st.session_state.student_pending_confirm_seat = ""
 if "student_last_known_score" not in st.session_state:
     st.session_state.student_last_known_score = None
 if "student_score_gain_banner" not in st.session_state:
@@ -2243,10 +2247,12 @@ else:
                 clean_seat = normalize_seat_num(raw_seat)
                 if clean_seat != st.session_state.student_saved_num:
                     st.session_state.student_saved_num = clean_seat
+                    st.session_state.student_pending_confirm_seat = ""
                     st.session_state.student_last_known_score = int(state["scores"].get(clean_seat, 0)) if clean_seat else None
 
                 already_in_pool = bool(clean_seat and clean_seat in state["candidates"])
                 is_winner_now = bool(clean_seat and clean_seat in state.get("last_winners", []))
+                is_confirmed_for_seat = bool(clean_seat and st.session_state.student_confirmed_seat == clean_seat)
 
                 if is_winner_now:
                     st.balloons()
@@ -2255,10 +2261,55 @@ else:
                     st.info(f"🙋 **{clean_seat} 號** 已在「第 {cur_round} 題」舉手名單中，請靜候老師抽籤！")
                 elif not is_open:
                     st.warning("⏸️ 本題目前暫停舉手報名，請等待老師開啟下一題。")
+                elif clean_seat and not is_confirmed_for_seat and st.session_state.student_pending_confirm_seat == clean_seat:
+                    # 首次輸入該座號時的身分確認卡片
+                    stu_info = roster.get(clean_seat, {})
+                    stu_name = stu_info.get("name", "").strip()
+                    stu_cls = stu_info.get("class_name", "").strip()
+                    if stu_name:
+                        cls_prefix = f"{stu_cls} · " if stu_cls else ""
+                        confirm_html = (
+                            f'<div style="background:#fffbeb; border:2px solid #f59e0b; border-radius:14px; padding:14px 16px; margin-bottom:10px; text-align:center;">'
+                            f'<div style="font-size:0.84rem; font-weight:800; color:#b45309;">🔍 首次使用請確認你的身分</div>'
+                            f'<div style="font-size:1.35rem; font-weight:900; color:#0f172a; margin-top:4px;">{cls_prefix}{clean_seat} 號 · {stu_name}</div>'
+                            f'<div style="font-size:0.8rem; color:#64748b; margin-top:4px;">確認無誤後，之後舉手將自動送出不再詢問</div>'
+                            f'</div>'
+                        )
+                    else:
+                        confirm_html = (
+                            f'<div style="background:#fffbeb; border:2px solid #f59e0b; border-radius:14px; padding:14px 16px; margin-bottom:10px; text-align:center;">'
+                            f'<div style="font-size:0.84rem; font-weight:800; color:#b45309;">🔍 首次使用請確認你的座號</div>'
+                            f'<div style="font-size:1.35rem; font-weight:900; color:#0f172a; margin-top:4px;">座號：{clean_seat} 號（名單未建檔）</div>'
+                            f'<div style="font-size:0.8rem; color:#64748b; margin-top:4px;">請確認座號沒有按錯，確認後之後舉手將直接送出</div>'
+                            f'</div>'
+                        )
+                    st.markdown(confirm_html, unsafe_allow_html=True)
+
+                    cfm_c1, cfm_c2 = st.columns(2)
+                    with cfm_c1:
+                        if st.button("✅ 是，確認是我並送出", type="primary", use_container_width=True, key="stu_confirm_yes_btn"):
+                            st.session_state.student_confirmed_seat = clean_seat
+                            st.session_state.student_pending_confirm_seat = ""
+                            with state["lock"]:
+                                if not state["is_open"]:
+                                    st.warning("老師剛剛已截止本題報名囉！")
+                                else:
+                                    state["candidates"][clean_seat] = time.time()
+                                    save_persisted_state(state)
+                            st.session_state.submitted_round = cur_round
+                            st.rerun()
+                    with cfm_c2:
+                        if st.button("✏️ 不是，重新輸入", use_container_width=True, key="stu_confirm_no_btn"):
+                            st.session_state.student_pending_confirm_seat = ""
+                            st.session_state.student_saved_num = ""
+                            st.rerun()
                 else:
                     if st.button("🙋‍♂️ 我要舉手搶答！", type="primary", use_container_width=True):
                         if not clean_seat:
                             st.error("請先輸入你的座號！")
+                        elif not is_confirmed_for_seat:
+                            st.session_state.student_pending_confirm_seat = clean_seat
+                            st.rerun()
                         else:
                             with state["lock"]:
                                 if not state["is_open"]:
