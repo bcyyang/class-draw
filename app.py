@@ -1869,6 +1869,7 @@ if st.session_state.view_mode == "admin":
     # 分頁 A：🎯 搶答抽籤主控台
     # ========================================================
     left_col, right_col = st.columns([8, 4], gap="large")
+    rolling_sound_box = st.empty()
 
     with left_col:
 
@@ -2096,7 +2097,8 @@ if st.session_state.view_mode == "admin":
                     auto_give = bool(state.get("auto_award", True))
                     sound_on = bool(st.session_state.get("sound_enabled", True))
 
-                    play_sound_effect("rolling", enabled=sound_on)
+                    with rolling_sound_box:
+                        play_sound_effect("rolling", enabled=sound_on)
 
                     for _ in range(15):
                         fake_sample = [random.choice(pool_nums) for _ in range(len(winners))]
@@ -2338,10 +2340,10 @@ if st.session_state.view_mode == "admin":
                 )
                 st.caption(f"🔗 學生端網址：`{clean_student_url}`")
 
-        # 固定在最底部的隱藏音效占位區，確保抽籤輪轉與開獎瞬間不會擠壓上方「今日即時記分板」的位置
-        if st.session_state.play_fanfare_once:
-            play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
-            st.session_state.play_fanfare_once = False
+    # 固定在整個頁面最底部（左右兩欄之外）播放中獎音效
+    if st.session_state.play_fanfare_once:
+        play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
+        st.session_state.play_fanfare_once = False
 
 # ==========================================
 # 7. 學生手機端 (STUDENT VIEW - 無密碼直接進入)
