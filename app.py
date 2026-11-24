@@ -94,6 +94,9 @@ st.markdown(
         display: flex;
         flex-direction: column;
         align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
     /* 中籤同學金色卡片（與輪轉卡片完全一致的固定尺寸，避免開獎瞬間畫面跳動） */
     .winner-pill {
         background: linear-gradient(180deg, #fde047 0%, #facc15 100%);
