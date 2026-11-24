@@ -94,38 +94,38 @@ st.markdown(
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
-        text-align: center;
-    }
-    /* 中籤同學金色卡片 */
+    /* 中籤同學金色卡片（與輪轉卡片完全一致的固定尺寸，避免開獎瞬間畫面跳動） */
     .winner-pill {
         background: linear-gradient(180deg, #fde047 0%, #facc15 100%);
         color: #0f172a;
         border: 3px solid #ffffff;
         border-radius: 22px;
-        padding: 14px 24px;
-        min-width: 138px;
+        width: 148px;
+        height: 168px;
+        padding: 12px 10px;
         margin: 6px;
         display: inline-flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
+        justify-content: space-between;
         box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+        box-sizing: border-box;
     }
-    /* 抽籤滾動跳號卡片 */
+    /* 抽籤滾動跳號卡片（與中籤卡片等寬等高，確保輪轉到開獎無縫銜接） */
     .rolling-pill {
-        background: rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.16);
         color: #ffffff;
-        border: 2px solid rgba(253, 224, 71, 0.75);
-        border-radius: 20px;
-        width: 112px;
-        height: 112px;
+        border: 3px solid rgba(253, 224, 71, 0.78);
+        border-radius: 22px;
+        width: 148px;
+        height: 168px;
+        padding: 12px 10px;
         margin: 6px;
         display: inline-flex;
+        flex-direction: column;
         align-items: center;
-        justify-content: center;
-        font-size: 2.8rem;
-        font-weight: 900;
+        justify-content: space-between;
+        box-sizing: border-box;
     }
     /* 候選人座號卡片 */
     .candidate-card {
@@ -1086,9 +1086,18 @@ def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, 
     awarded_set = set(awarded_list or [])
     roster = get_active_roster(state)
     if rolling:
-        pills = "".join(f'<div class="rolling-pill">{num}</div>' for num in winners)
+        pills_list = []
+        for idx, num in enumerate(winners):
+            pills_list.append(
+                f'<div class="rolling-pill">'
+                f'<span style="background:rgba(253,224,71,0.22); color:#fde047; font-size:0.95rem; font-weight:900; padding:3px 16px; border-radius:999px; letter-spacing:0.06em;">第 {idx + 1} 位</span>'
+                f'<span style="font-size:3.2rem; font-weight:900; line-height:1.05; color:#ffffff;">{num}</span>'
+                f'<span style="font-size:0.78rem; font-weight:800; color:#cbd5e1;">抽籤中...</span>'
+                f'</div>'
+            )
+        pills = "".join(pills_list)
         inner = (
-            f'<div style="color:#fde047; font-size:0.95rem; font-weight:800; letter-spacing:0.06em; margin-bottom:12px;">'
+            f'<div style="color:#fde047; font-size:0.98rem; font-weight:800; letter-spacing:0.06em; margin-bottom:10px;">'
             f'🎰 正在從 {total_pool} 位舉手同學中抽出 {len(winners)} 位...</div>'
             f'<div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:center;">{pills}</div>'
         )
@@ -1097,21 +1106,20 @@ def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, 
         for idx, num in enumerate(winners):
             stu_name = roster.get(num, {}).get("name", "")
             name_html = (
-                f'<span style="font-size:1.1rem; font-weight:900; color:#1e293b; margin-top:2px;">{stu_name}</span>'
+                f'<span style="font-size:1.02rem; font-weight:900; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:124px;">{stu_name}</span>'
                 if stu_name
-                else ""
+                else '<span style="font-size:0.82rem; font-weight:700; color:#78350f;">中籤同學</span>'
             )
             got_pts = (
-                f'<span style="background:#059669; color:#ffffff; font-size:0.76rem; font-weight:900; padding:2px 10px; border-radius:999px; margin-top:4px;">✓ 已加分</span>'
+                f'<span style="background:#059669; color:#ffffff; font-size:0.74rem; font-weight:900; padding:2px 10px; border-radius:999px;">✓ 已加分</span>'
                 if num in awarded_set
-                else f'<span style="background:rgba(15,23,42,0.12); color:#422006; font-size:0.74rem; font-weight:800; padding:2px 10px; border-radius:999px; margin-top:4px;">待給 {round_points} 分</span>'
+                else f'<span style="background:rgba(15,23,42,0.12); color:#422006; font-size:0.72rem; font-weight:800; padding:2px 10px; border-radius:999px;">待給 {round_points} 分</span>'
             )
             pills_list.append(
                 f'<div class="winner-pill">'
-                f'<span style="background:#78350f; color:#fef08a; font-size:1.15rem; font-weight:900; padding:4px 18px; border-radius:999px; letter-spacing:0.06em; margin-bottom:6px;">第 {idx + 1} 位</span>'
-                f'<span style="font-size:3.5rem; font-weight:900; line-height:1.02; margin-top:2px;">{num}</span>'
-                f'{name_html}'
-                f'{got_pts}'
+                f'<span style="background:#78350f; color:#fef08a; font-size:0.95rem; font-weight:900; padding:3px 16px; border-radius:999px; letter-spacing:0.06em;">第 {idx + 1} 位</span>'
+                f'<span style="font-size:3.2rem; font-weight:900; line-height:1.05; color:#0f172a;">{num}</span>'
+                f'<div style="display:flex; flex-direction:column; align-items:center; gap:2px;">{name_html}{got_pts}</div>'
                 f'</div>'
             )
         pills = "".join(pills_list)
@@ -1569,15 +1577,15 @@ if st.session_state.view_mode == "admin":
                 if date_cols:
                     recent_str = "、".join(date_cols[-6:])
                     more_str = f" 等共 {len(date_cols)} 次" if len(date_cols) > 6 else ""
-                    st.caption(f"📅 本班已登錄上課日期：{recent_str}{more_str}")
-                else:
-                    st.caption("📅 本班尚未結算任何上課日期；下課時輸入日期並按「💾 結算今日寫入總表」，即可自動建立多週累計總表！")
-
-        # 2. 渲染 8 列 × 8 欄座次表（含 2-2-2-2 走道區隔線、今日暫存分數）
-        @st.fragment(run_every=2)
+        # 2. 渲染 8 列 × 8 欄座次表（採用局部刷新與低頻輪詢，大幅消除手機/平板連續點擊加減分的 Lag）
+        @st.fragment(run_every=6)
         def live_seating_grid():
             sync_state_from_disk_if_newer(state)
             cur_roster = get_active_roster(state)
+
+            toast_msg = st.session_state.pop("seating_toast_msg", None)
+            if toast_msg:
+                st.toast(toast_msg)
 
             aisle_header_cols = st.columns([1, 1, 0.14, 1, 1, 0.14, 1, 1, 0.14, 1, 1], gap="small")
             for group_idx, col_pos in enumerate([0, 3, 6, 9]):
@@ -1648,25 +1656,25 @@ if st.session_state.view_mode == "admin":
                             )
                             b_add, b_sub = st.columns([1.3, 1.0], gap="small")
                             with b_add:
-                                st.button(
+                                if st.button(
                                     "➕",
                                     key=f"seat_add_{seat_str}",
                                     use_container_width=True,
                                     type="secondary",
                                     help=f"{seat_str} {name_label} 今日 +1 分",
-                                    on_click=adjust_seat_score,
-                                    args=(seat_str, 1, True),
-                                )
+                                ):
+                                    adjust_seat_score(seat_str, 1, True)
+                                    st.rerun(scope="fragment")
                             with b_sub:
-                                st.button(
+                                if st.button(
                                     "➖",
                                     key=f"seat_sub_{seat_str}",
                                     use_container_width=True,
                                     disabled=(cur_score == 0),
                                     help=f"{seat_str} {name_label} 今日 -1 分",
-                                    on_click=adjust_seat_score,
-                                    args=(seat_str, -1, True),
-                                )
+                                ):
+                                    adjust_seat_score(seat_str, -1, True)
+                                    st.rerun(scope="fragment")
                         else:
                             card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-empty"
                             if cur_score > 0:
@@ -1685,24 +1693,24 @@ if st.session_state.view_mode == "admin":
                                 )
                             b_add, b_sub = st.columns([1.3, 1.0], gap="small")
                             with b_add:
-                                st.button(
+                                if st.button(
                                     "➕",
                                     key=f"seat_empty_add_{seat_str}",
                                     use_container_width=True,
                                     help=f"{seat_str} 今日 +1 分",
-                                    on_click=adjust_seat_score,
-                                    args=(seat_str, 1, True),
-                                )
+                                ):
+                                    adjust_seat_score(seat_str, 1, True)
+                                    st.rerun(scope="fragment")
                             with b_sub:
-                                st.button(
+                                if st.button(
                                     "➖",
                                     key=f"seat_empty_sub_{seat_str}",
                                     use_container_width=True,
                                     disabled=(cur_score == 0),
                                     help=f"{seat_str} 今日 -1 分",
-                                    on_click=adjust_seat_score,
-                                    args=(seat_str, -1, True),
-                                )
+                                ):
+                                    adjust_seat_score(seat_str, -1, True)
+                                    st.rerun(scope="fragment")
 
         live_seating_grid()
         st.markdown('<div class="podium-banner">講　　　　台</div>', unsafe_allow_html=True)
@@ -2251,12 +2259,13 @@ else:
                     st.session_state.student_last_known_score = int(state["scores"].get(clean_seat, 0)) if clean_seat else None
 
                 already_in_pool = bool(clean_seat and clean_seat in state["candidates"])
-                is_winner_now = bool(clean_seat and clean_seat in state.get("last_winners", []))
+                last_winners_list = list(state.get("last_winners", []))
+                is_winner_now = bool(clean_seat and clean_seat in last_winners_list)
                 is_confirmed_for_seat = bool(clean_seat and st.session_state.student_confirmed_seat == clean_seat)
 
                 if is_winner_now:
-                    st.balloons()
-                    st.success(f"🎉 恭喜 **{clean_seat} 號**！你被老師抽中發言囉！")
+                    winner_rank = last_winners_list.index(clean_seat) + 1
+                    st.success(f"🎉 恭喜 **{clean_seat} 號**！你是 **第 {winner_rank} 位** 中籤發言同學，請準備回答！")
                 elif already_in_pool:
                     st.info(f"🙋 **{clean_seat} 號** 已在「第 {cur_round} 題」舉手名單中，請靜候老師抽籤！")
                 elif not is_open:
