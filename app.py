@@ -337,19 +337,28 @@ components.html(
                 let comboCount = 0;
                 let comboHideTimer = null;
 
-                // 從按鈕擷取「座號 + 姓名」並清除原生 title 避免滑鼠懸停彈出提示
+                // 直接從按鈕所屬的座位卡片擷取「座號 + 姓名」，完全不依賴 help/title 屬性
                 const inspectSeatingBtn = (btn) => {{
                     if (!btn) return null;
                     const txt = (btn.innerText || btn.textContent || '').trim();
                     if (!txt.includes('➕') && !txt.includes('➖')) return null;
 
-                    const rawTitle = btn.getAttribute('title') || btn.getAttribute('aria-label') || '';
-                    if (rawTitle) {{
-                        btn.dataset.seatingHint = rawTitle;
-                        btn.removeAttribute('title');
+                    if (btn.hasAttribute('title')) btn.removeAttribute('title');
+
+                    let studentLabel = '';
+                    let cur = btn.parentElement;
+                    for (let i = 0; i < 8 && cur; i++) {{
+                        const card = cur.querySelector('.seat-card-box, .seat-card-empty');
+                        if (card) {{
+                            const lines = (card.innerText || '').split('\n').map(s => s.trim()).filter(Boolean);
+                            const seatLine = lines.find(l => /^\d{{2}}$/.test(l)) || '';
+                            const nameLine = lines.find(l => l !== seatLine && !l.startsWith('今日') && !l.includes('空位') && l.length <= 8 && !/[甲乙丙丁系科班組]/.test(l)) || '';
+                            studentLabel = `${{seatLine}} ${{nameLine}}`.trim();
+                            break;
+                        }}
+                        cur = cur.parentElement;
                     }}
-                    const hintText = btn.dataset.seatingHint || '';
-                    const studentLabel = hintText.replace(/今日\s*[+-]\d+\s*分/g, '').trim() || '同學';
+                    if (!studentLabel) studentLabel = '同學';
                     const step = txt.includes('➕') ? 1 : -1;
                     return {{ studentLabel, step }};
                 }};
@@ -384,12 +393,6 @@ components.html(
                 const attachComboToDoc = (targetDoc) => {{
                     if (!targetDoc || targetDoc.__seatingComboAttached) return;
                     targetDoc.__seatingComboAttached = true;
-
-                    // 滑鼠經過時靜默剝除原生 title，防止瀏覽器自動顯示 Hover 提示框
-                    targetDoc.addEventListener('pointerover', (e) => {{
-                        const btn = e.target && e.target.closest ? e.target.closest('button') : null;
-                        inspectSeatingBtn(btn);
-                    }}, true);
 
                     targetDoc.addEventListener('click', (e) => {{
                         const btn = e.target && e.target.closest ? e.target.closest('button') : null;
@@ -1837,7 +1840,6 @@ if st.session_state.view_mode == "admin":
                                     key=f"seat_add_{seat_str}",
                                     use_container_width=True,
                                     type="secondary",
-                                    help=f"{seat_str} {name_label} 今日 +1 分",
                                 ):
                                     adjust_seat_score(seat_str, 1, True)
                                     st.rerun(scope="fragment")
@@ -1847,7 +1849,6 @@ if st.session_state.view_mode == "admin":
                                     key=f"seat_sub_{seat_str}",
                                     use_container_width=True,
                                     disabled=(cur_score == 0),
-                                    help=f"{seat_str} {name_label} 今日 -1 分",
                                 ):
                                     adjust_seat_score(seat_str, -1, True)
                                     st.rerun(scope="fragment")
@@ -1873,7 +1874,6 @@ if st.session_state.view_mode == "admin":
                                     "➕",
                                     key=f"seat_empty_add_{seat_str}",
                                     use_container_width=True,
-                                    help=f"{seat_str} 今日 +1 分",
                                 ):
                                     adjust_seat_score(seat_str, 1, True)
                                     st.rerun(scope="fragment")
@@ -1883,7 +1883,6 @@ if st.session_state.view_mode == "admin":
                                     key=f"seat_empty_sub_{seat_str}",
                                     use_container_width=True,
                                     disabled=(cur_score == 0),
-                                    help=f"{seat_str} 今日 -1 分",
                                 ):
                                     adjust_seat_score(seat_str, -1, True)
                                     st.rerun(scope="fragment")
