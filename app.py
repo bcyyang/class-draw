@@ -1054,8 +1054,6 @@ def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
     elif actual_delta < 0:
         st.session_state.seating_feedback_trigger = ("sub", time.time())
     else:
-        st.session_state.seating_feedback_trigger = ("sub", time.time())
-    else:
         st.session_state["seating_toast_msg"] = f"ℹ️ {display_who} 今日目前已是 0 分"
         st.session_state.seating_feedback_trigger = ("sub", time.time())
 
