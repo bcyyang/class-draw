@@ -1491,10 +1491,6 @@ if st.session_state.view_mode == "admin":
                     on_click=close_new_class_confirm,
                 )
 
-    if st.session_state.play_fanfare_once:
-        play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
-        st.session_state.play_fanfare_once = False
-
     if st.session_state.pop("scores_cleared_toast", False):
         st.toast("🗑️ 已清空今日暫存記分板紀錄！")
 
@@ -2329,6 +2325,11 @@ if st.session_state.view_mode == "admin":
                     unsafe_allow_html=True,
                 )
                 st.caption(f"🔗 學生端網址：`{clean_student_url}`")
+
+        # 將抽籤中獎音效放在主控台最下方播放，避免在頂部標題列與藍色聚光燈方框之間產生額外間距跳動
+        if st.session_state.play_fanfare_once:
+            play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
+            st.session_state.play_fanfare_once = False
 
 # ==========================================
 # 7. 學生手機端 (STUDENT VIEW - 無密碼直接進入)
