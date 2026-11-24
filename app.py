@@ -1076,8 +1076,10 @@ def generate_qr_base64(url: str) -> str:
 def play_sound_effect(kind="rolling", enabled=True):
     if not enabled:
         return
+    nonce = f"{time.time():.6f}_{random.randint(1000, 9999)}"
     js_code = f"""
     <script>
+    /* trigger: {nonce} */
     (function() {{
         try {{
             if (window.parent && window.parent.__classDrawAudioEngine) {{
@@ -1195,8 +1197,10 @@ def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
 def play_seating_click_feedback(kind="add"):
     """播放最單純乾淨的純弦波單音（加分 1000Hz / 減分 520Hz）並觸發手機短震動回饋"""
     vib_ms = 60 if kind == "sub" else 45
+    nonce = f"{time.time():.6f}_{random.randint(1000, 9999)}"
     js_code = f"""
     <script>
+    /* trigger: {nonce} */
     (function() {{
         try {{
             if (navigator && navigator.vibrate) {{
