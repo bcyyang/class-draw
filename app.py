@@ -1589,22 +1589,36 @@ if st.session_state.view_mode == "admin":
                     )
             for div_pos in (2, 5, 8):
                 with aisle_header_cols[div_pos]:
-                    st.markdown(
-                        '<div style="text-align:center; font-size:0.72rem; font-weight:900; color:#94a3b8; padding-top:2px;">走道</div>',
-                        unsafe_allow_html=True,
-                    )
+                    if div_pos == 5:
+                        st.markdown(
+                            '<div style="text-align:center; font-size:0.72rem; font-weight:900; color:#4f46e5; padding-top:2px;">中走道</div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown(
+                            '<div style="text-align:center; font-size:0.72rem; font-weight:900; color:#94a3b8; padding-top:2px;">走道</div>',
+                            unsafe_allow_html=True,
+                        )
 
             for row_idx in range(7, -1, -1):
                 row_cols = st.columns([1, 1, 0.14, 1, 1, 0.14, 1, 1, 0.14, 1, 1], gap="small")
 
                 for div_pos in (2, 5, 8):
                     with row_cols[div_pos]:
-                        st.markdown(
-                            '<div style="display:flex; justify-content:center; height:172px;">'
-                            '<div style="width:2.5px; height:100%; background:repeating-linear-gradient(to bottom, #94a3b8 0, #94a3b8 7px, transparent 7px, transparent 13px); border-radius:2px;"></div>'
-                            '</div>',
-                            unsafe_allow_html=True,
-                        )
+                        if div_pos == 5:
+                            st.markdown(
+                                '<div style="display:flex; justify-content:center; height:172px;">'
+                                '<div style="width:3.5px; height:100%; background:#6366f1; border-radius:2px;"></div>'
+                                '</div>',
+                                unsafe_allow_html=True,
+                            )
+                        else:
+                            st.markdown(
+                                '<div style="display:flex; justify-content:center; height:172px;">'
+                                '<div style="width:2.5px; height:100%; background:repeating-linear-gradient(to bottom, #94a3b8 0, #94a3b8 7px, transparent 7px, transparent 13px); border-radius:2px;"></div>'
+                                '</div>',
+                                unsafe_allow_html=True,
+                            )
 
                 for col_idx in range(8):
                     target_col_idx = col_idx + (col_idx // 2)
