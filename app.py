@@ -653,6 +653,8 @@ if "seating_feedback_trigger" not in st.session_state:
     st.session_state.seating_feedback_trigger = None
 if "seating_undo_stack" not in st.session_state:
     st.session_state.seating_undo_stack = []
+if "seating_combo_tracker" not in st.session_state:
+    st.session_state.seating_combo_tracker = {"seat": "", "delta": 0, "ts": 0.0}
 if "uploader_reset_ids" not in st.session_state:
     st.session_state.uploader_reset_ids = {"slot_1": 0, "slot_2": 0, "slot_3": 0}
 if "settle_date_label" not in st.session_state:
@@ -1034,11 +1036,37 @@ def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
     stu_info = get_active_roster(state).get(seat, {})
     stu_name = stu_info.get("name", "")
     display_who = f"{seat}號 {stu_name}".strip()
+
+    now_ts = time.time()
+    tracker = st.session_state.get("seating_combo_tracker", {"seat": "", "delta": 0, "ts": 0.0})
+    if record_undo and actual_delta != 0:
+        if tracker.get("seat") == seat and (now_ts - tracker.get("ts", 0.0) <= 4.0):
+            combo_delta = tracker.get("delta", 0) + actual_delta
+        else:
+            combo_delta = actual_delta
+        st.session_state.seating_combo_tracker = {
+            "seat": seat,
+            "delta": combo_delta,
+            "ts": now_ts,
+        }
+    else:
+        combo_delta = actual_delta
+
     if actual_delta > 0:
-        st.session_state["seating_toast_msg"] = f"⭐ {display_who} 今日 +{actual_delta} 分（今日累計 {new_val} 分）"
+        if combo_delta > 0:
+            st.session_state["seating_toast_msg"] = f"⭐ {display_who} 本次 +{combo_delta} 分（今日累計 {new_val} 分）"
+        elif combo_delta < 0:
+            st.session_state["seating_toast_msg"] = f"➖ {display_who} 本次 {combo_delta} 分（今日累計 {new_val} 分）"
+        else:
+            st.session_state["seating_toast_msg"] = f"↔️ {display_who} 本次抵銷為 0 分（今日累計 {new_val} 分）"
         st.session_state.seating_feedback_trigger = ("add", time.time())
     elif actual_delta < 0:
-        st.session_state["seating_toast_msg"] = f"➖ {display_who} 今日 {actual_delta} 分（今日累計 {new_val} 分）"
+        if combo_delta < 0:
+            st.session_state["seating_toast_msg"] = f"➖ {display_who} 本次 {combo_delta} 分（今日累計 {new_val} 分）"
+        elif combo_delta > 0:
+            st.session_state["seating_toast_msg"] = f"⭐ {display_who} 本次 +{combo_delta} 分（今日累計 {new_val} 分）"
+        else:
+            st.session_state["seating_toast_msg"] = f"↔️ {display_who} 本次抵銷為 0 分（今日累計 {new_val} 分）"
         st.session_state.seating_feedback_trigger = ("sub", time.time())
     else:
         st.session_state["seating_toast_msg"] = f"ℹ️ {display_who} 今日目前已是 0 分"
