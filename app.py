@@ -953,6 +953,10 @@ def play_sound_effect(kind="fanfare", enabled=True):
             } catch (e) {}
         })();
         </script>
+        """
+    components.html(js_code, height=0, width=0)
+
+
 def build_scores_csv(scores_dict, history_dict, sort_mode="seat", roster_dict=None, fallback_date_col=""):
     """產生單堂課即時成績 CSV 資料（若今日分數已歸零但該日期剛結算過，自動從該日期欄位帶出分數）"""
     roster = roster_dict or {}
