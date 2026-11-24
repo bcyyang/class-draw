@@ -447,6 +447,8 @@ components.html(
 # 2. 跨連線持久化共用狀態與輔助函式
 # ==========================================
 DATA_FILE = "class_draw_state.json"
+DEFAULT_ROSTERS_DIR = "default_rosters"
+DEFAULT_ROSTERS_JSON = "default_rosters.json"
 DEFAULT_PIN = "1234"
 
 
@@ -456,6 +458,82 @@ def create_empty_rosters():
         "slot_2": {"custom_name": "", "date_columns": [], "students": {}},
         "slot_3": {"custom_name": "", "date_columns": [], "students": {}},
     }
+
+
+def load_default_rosters_from_github():
+    """從 GitHub 倉庫預存的 default_rosters.json 或 default_rosters/*.csv 自動載入預設三班名單"""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    result = {}
+
+    # 1. 優先讀取 default_rosters.json（若倉庫有存放 JSON 預設名單）
+    json_path = os.path.join(base_dir, DEFAULT_ROSTERS_JSON)
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                raw_json = json.load(f)
+            if isinstance(raw_json, dict):
+                for sk in ("slot_1", "slot_2", "slot_3"):
+                    if sk in raw_json and isinstance(raw_json[sk], dict) and raw_json[sk].get("students"):
+                        result[sk] = {
+                            "custom_name": raw_json[sk].get("custom_name", ""),
+                            "date_columns": list(raw_json[sk].get("date_columns", [])),
+                            "students": raw_json[sk]["students"],
+                        }
+                if result:
+                    return result
+        except Exception:
+            pass
+
+    # 2. 搜尋 default_rosters/ 資料夾或倉庫根目錄下的預存 CSV 名單
+    search_dirs = [os.path.join(base_dir, DEFAULT_ROSTERS_DIR), base_dir]
+    candidate_csvs = []
+    for d in search_dirs:
+        if os.path.isdir(d):
+            for fname in sorted(os.listdir(d)):
+                if fname.lower().endswith(".csv") and "範本" not in fname and "sample" not in fname.lower():
+                    candidate_csvs.append(os.path.join(d, fname))
+        if candidate_csvs:
+            break
+
+    if candidate_csvs:
+        slot_order = ["slot_1", "slot_2", "slot_3"]
+        # 若檔名有明確標示 slot_1 / 1 / 班級1 等，優先對號入座
+        unassigned = []
+        for fpath in candidate_csvs:
+            bname = os.path.basename(fpath)
+            matched_slot = None
+            for idx, sk in enumerate(slot_order, start=1):
+                if f"slot_{idx}" in bname.lower() or f"roster_{idx}" in bname.lower() or f"班級{idx}" in bname:
+                    matched_slot = sk
+                    break
+            if matched_slot and matched_slot not in result:
+                try:
+                    with open(fpath, "rb") as f:
+                        stus, d_cols = parse_roster_csv_bytes(f.read())
+                    c_name = os.path.splitext(bname)[0]
+                    for prefix in ("slot_1_", "slot_2_", "slot_3_", "roster_1_", "roster_2_", "roster_3_"):
+                        if c_name.lower().startswith(prefix):
+                            c_name = c_name[len(prefix):]
+                    result[matched_slot] = {"custom_name": c_name, "date_columns": d_cols, "students": stus}
+                except Exception:
+                    pass
+            else:
+                unassigned.append(fpath)
+
+        for fpath in unassigned:
+            avail_slots = [sk for sk in slot_order if sk not in result]
+            if not avail_slots:
+                break
+            sk = avail_slots[0]
+            try:
+                with open(fpath, "rb") as f:
+                    stus, d_cols = parse_roster_csv_bytes(f.read())
+                c_name = os.path.splitext(os.path.basename(fpath))[0]
+                result[sk] = {"custom_name": c_name, "date_columns": d_cols, "students": stus}
+            except Exception:
+                pass
+
+    return result
 
 
 def load_persisted_state():
@@ -486,16 +564,29 @@ def load_persisted_state():
 
     if not isinstance(default_data.get("rosters"), dict):
         default_data["rosters"] = create_empty_rosters()
+
+    # 若任何班級名單為空（例如容器重啟清空暫存），自動從 GitHub 預存的 default_rosters 回補
+    github_defaults = load_default_rosters_from_github()
+    restored_any = False
+
     for sk in ("slot_1", "slot_2", "slot_3"):
         if sk not in default_data["rosters"] or not isinstance(default_data["rosters"][sk], dict):
             default_data["rosters"][sk] = {"custom_name": "", "date_columns": [], "students": {}}
         default_data["rosters"][sk].setdefault("custom_name", "")
         default_data["rosters"][sk].setdefault("date_columns", [])
         default_data["rosters"][sk].setdefault("students", {})
+
+        if not default_data["rosters"][sk]["students"] and sk in github_defaults:
+            default_data["rosters"][sk] = github_defaults[sk]
+            restored_any = True
+
         for seat_k, stu_v in default_data["rosters"][sk]["students"].items():
             if isinstance(stu_v, dict):
                 stu_v.setdefault("records", {})
                 stu_v.setdefault("semester_total", sum(int(x) for x in stu_v["records"].values()))
+
+    if restored_any:
+        save_persisted_state(default_data)
     return default_data
 
 
@@ -1447,10 +1538,22 @@ if st.session_state.view_mode == "admin":
 
             # 展開區：管理三個班級的 CSV 名單 + 結算今日寫入總表 + 下載成績總表
             with st.expander("📂 管理三個班級的 CSV 名單、結算今日成績與下載總表", expanded=False):
-                info_c1, info_c2 = st.columns([7.5, 2.5])
+                info_c1, info_c2, info_c3 = st.columns([5.3, 2.4, 2.3])
                 with info_c1:
                     st.caption("💡 支援兩種 CSV 匯入：① 學期初的「班級、座號、姓名」三欄名單；② 上週下載的「學期累計成績總表 (.csv)」，匯入後會自動還原過去所有日期欄位並繼續往右累加！")
                 with info_c2:
+                    if st.button("🔄 載入 GitHub 預設名單", use_container_width=True, key="reload_github_default_rosters_btn"):
+                        gh_rosters = load_default_rosters_from_github()
+                        if gh_rosters:
+                            with state["lock"]:
+                                for sk_g, val_g in gh_rosters.items():
+                                    state["rosters"][sk_g] = val_g
+                                save_persisted_state(state)
+                            st.toast(f"✅ 已從 GitHub 重新載入 {len(gh_rosters)} 個班級的預設名單！")
+                            st.rerun()
+                        else:
+                            st.warning("未在倉庫中找到 default_rosters 資料夾或預設 CSV 檔案。")
+                with info_c3:
                     st.download_button(
                         label="📄 下載空白名單範本",
                         data=generate_sample_roster_csv(),
