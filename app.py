@@ -69,6 +69,13 @@ st.markdown(
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
     }
+    /* 讓高度為 0 的隱藏音效 iframe 容器完全不佔用版面間距，杜絕抽籤時畫面跳動 */
+    div[data-testid="stElementContainer"]:has(iframe[height="0"]) {
+        display: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        height: 0 !important;
+    }
     /* 保留足夠頂部與底部安全距離，避免放大或滑動到底部時被工具列遮擋 */
     .block-container {
         padding-top: 3.2rem !important;
