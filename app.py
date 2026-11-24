@@ -297,7 +297,72 @@ components.html(
             }}
             appTitleMeta.content = "課堂搶答記分";
 
-            // 專屬懸停提示 + 連點原地即時累加浮動氣泡 (+1 -> +2 -> +3)
+            // 1. 在外層主視窗建立全域共用的 Web Audio 引擎，並在使用者首次觸碰/點擊畫面時永久解鎖
+            if (!win.__classDrawAudioEngine) {{
+                const AudioCtx = win.AudioContext || win.webkitAudioContext;
+                const sharedCtx = AudioCtx ? new AudioCtx() : null;
+
+                const unlockAudio = () => {{
+                    if (sharedCtx && sharedCtx.state === 'suspended') {{
+                        sharedCtx.resume().catch(() => {{}});
+                    }}
+                }};
+                doc.addEventListener('pointerdown', unlockAudio, true);
+                doc.addEventListener('keydown', unlockAudio, true);
+
+                win.__classDrawAudioEngine = {{
+                    play: function(kind) {{
+                        if (!sharedCtx) return;
+                        if (sharedCtx.state === 'suspended') {{
+                            sharedCtx.resume().catch(() => {{}});
+                        }}
+                        const now = sharedCtx.currentTime;
+                        if (kind === 'rolling') {{
+                            for (let i = 0; i < 14; i++) {{
+                                const osc = sharedCtx.createOscillator();
+                                const gain = sharedCtx.createGain();
+                                osc.type = 'sine';
+                                osc.frequency.setValueAtTime(420 + i * 28, now + i * 0.085);
+                                gain.gain.setValueAtTime(0.14, now + i * 0.085);
+                                gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.085 + 0.06);
+                                osc.connect(gain);
+                                gain.connect(sharedCtx.destination);
+                                osc.start(now + i * 0.085);
+                                osc.stop(now + i * 0.085 + 0.06);
+                            }}
+                        }} else if (kind === 'fanfare') {{
+                            const notes = [523.25, 659.25, 783.99, 1046.50];
+                            notes.forEach((freq, idx) => {{
+                                const osc = sharedCtx.createOscillator();
+                                const gain = sharedCtx.createGain();
+                                osc.type = 'triangle';
+                                osc.frequency.setValueAtTime(freq, now + idx * 0.09);
+                                gain.gain.setValueAtTime(0.22, now + idx * 0.09);
+                                gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.09 + 0.28);
+                                osc.connect(gain);
+                                gain.connect(sharedCtx.destination);
+                                osc.start(now + idx * 0.09);
+                                osc.stop(now + idx * 0.09 + 0.28);
+                            }});
+                        }} else if (kind === 'add' || kind === 'sub') {{
+                            const freq = (kind === 'sub') ? 520 : 1000;
+                            const osc = sharedCtx.createOscillator();
+                            const gain = sharedCtx.createGain();
+                            osc.type = 'sine';
+                            osc.frequency.setValueAtTime(freq, now);
+                            gain.gain.setValueAtTime(0.001, now);
+                            gain.gain.linearRampToValueAtTime(0.35, now + 0.008);
+                            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.075);
+                            osc.connect(gain);
+                            gain.connect(sharedCtx.destination);
+                            osc.start(now);
+                            osc.stop(now + 0.08);
+                        }}
+                    }}
+                }};
+            }}
+
+            // 2. 專屬懸停提示 + 連點原地即時累加浮動氣泡 (+1 -> +2 -> +3)
             if (!win.__seatingComboBubbleBoundV2) {{
                 win.__seatingComboBubbleBoundV2 = true;
 
@@ -1011,53 +1076,17 @@ def generate_qr_base64(url: str) -> str:
 def play_sound_effect(kind="rolling", enabled=True):
     if not enabled:
         return
-    if kind == "rolling":
-        js_code = """
-        <script>
-        (function() {
-            try {
-                const AudioCtx = window.AudioContext || window.webkitAudioContext;
-                const ctx = new AudioCtx();
-                for (let i = 0; i < 14; i++) {
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(420 + i * 28, ctx.currentTime + i * 0.085);
-                    gain.gain.setValueAtTime(0.11, ctx.currentTime + i * 0.085);
-                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.085 + 0.06);
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-                    osc.start(ctx.currentTime + i * 0.085);
-                    osc.stop(ctx.currentTime + i * 0.085 + 0.06);
-                }
-            } catch (e) {}
-        })();
-        </script>
-        """
-    else:
-        js_code = """
-        <script>
-        (function() {
-            try {
-                const AudioCtx = window.AudioContext || window.webkitAudioContext;
-                const ctx = new AudioCtx();
-                const notes = [523.25, 659.25, 783.99, 1046.50];
-                notes.forEach((freq, idx) => {
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.09);
-                    gain.gain.setValueAtTime(0.18, ctx.currentTime + idx * 0.09);
-                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.09 + 0.28);
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-                    osc.start(ctx.currentTime + idx * 0.09);
-                    osc.stop(ctx.currentTime + idx * 0.09 + 0.28);
-                });
-            } catch (e) {}
-        })();
-        </script>
-        """
+    js_code = f"""
+    <script>
+    (function() {{
+        try {{
+            if (window.parent && window.parent.__classDrawAudioEngine) {{
+                window.parent.__classDrawAudioEngine.play("{kind}");
+            }}
+        }} catch (e) {{}}
+    }})();
+    </script>
+    """
     components.html(js_code, height=0, width=0)
 
 
@@ -1165,7 +1194,6 @@ def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
 
 def play_seating_click_feedback(kind="add"):
     """播放最單純乾淨的純弦波單音（加分 1000Hz / 減分 520Hz）並觸發手機短震動回饋"""
-    freq = 520 if kind == "sub" else 1000
     vib_ms = 60 if kind == "sub" else 45
     js_code = f"""
     <script>
@@ -1176,20 +1204,9 @@ def play_seating_click_feedback(kind="add"):
             }}
         }} catch (e) {{}}
         try {{
-            const AudioCtx = window.AudioContext || window.webkitAudioContext;
-            const ctx = new AudioCtx();
-            const now = ctx.currentTime;
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime({freq}, now);
-            gain.gain.setValueAtTime(0.001, now);
-            gain.gain.linearRampToValueAtTime(0.35, now + 0.008);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.075);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start(now);
-            osc.stop(now + 0.08);
+            if (window.parent && window.parent.__classDrawAudioEngine) {{
+                window.parent.__classDrawAudioEngine.play("{kind}");
+            }}
         }} catch (e) {{}}
     }})();
     </script>
