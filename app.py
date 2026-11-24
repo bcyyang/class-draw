@@ -1993,7 +1993,7 @@ if st.session_state.view_mode == "admin":
                         st.rerun()
 
                 all_seats = set(state["scores"].keys()) | set(state["picked_history"].keys())
-                score_items = [(seat, state["scores"].get(seat, 0)) for seat in all_seats]
+                score_items = [(seat, int(state["scores"].get(seat, 0))) for seat in all_seats if int(state["scores"].get(seat, 0)) > 0]
 
                 if not score_items:
                     st.markdown(
