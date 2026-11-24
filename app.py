@@ -2011,6 +2011,7 @@ if st.session_state.view_mode == "admin":
         spotlight_placeholder = live_admin_left_board()
 
     with right_col:
+        rolling_sound_placeholder = st.empty()
         with st.container(border=True):
             st.markdown("#### 🎲 抽籤規則與啟動")
             mode_choice = st.radio(
@@ -2329,7 +2330,6 @@ if st.session_state.view_mode == "admin":
                 st.caption(f"🔗 學生端網址：`{clean_student_url}`")
 
         # 固定在最底部的隱藏音效占位區，確保抽籤輪轉與開獎瞬間不會擠壓上方「今日即時記分板」的位置
-        rolling_sound_placeholder = st.empty()
         if st.session_state.play_fanfare_once:
             play_sound_effect("fanfare", enabled=st.session_state.sound_enabled)
             st.session_state.play_fanfare_once = False
