@@ -512,16 +512,16 @@ components.html(
                 }};
 
                 const triggerLiveComboBubble = (btn, info) => {{
-                    if (comboStudent === info.studentLabel && comboPill.classList.contains('visible')) {
+                    if (comboStudent === info.studentLabel && comboPill.classList.contains('visible')) {{
                         comboCount += info.step;
-                    } else {
+                    }} else {{
                         comboStudent = info.studentLabel;
                         comboCount = info.step;
-                    }
+                    }}
 
                     const rect = getScreenRectInTopWin(btn);
-                    const signText = comboCount > 0 ? `+${comboCount} 分` : `${comboCount} 分`;
-                    comboPill.textContent = `${comboStudent}  ${signText}`;
+                    const signText = comboCount > 0 ? `+${{comboCount}} 分` : `${{comboCount}} 分`;
+                    comboPill.textContent = `${{comboStudent}}  ${{signText}}`;
                     comboPill.classList.toggle('sub-mode', comboCount < 0);
                     comboPill.style.left = (rect.left + rect.width / 2) + 'px';
                     comboPill.style.top = (Math.max(54, rect.top - 10)) + 'px';
@@ -531,49 +531,49 @@ components.html(
                     comboPill.classList.add('visible');
 
                     if (comboHideTimer) win.clearTimeout(comboHideTimer);
-                    comboHideTimer = win.setTimeout(() => {
+                    comboHideTimer = win.setTimeout(() => {{
                         comboPill.classList.remove('visible');
                         comboStudent = '';
                         comboCount = 0;
-                    }, 1800);
-                };
+                    }}, 1800);
+                }};
 
-                const attachComboToDoc = (targetDoc) => {
+                const attachComboToDoc = (targetDoc) => {{
                     if (!targetDoc || targetDoc.__seatingComboAttachedV2) return;
                     targetDoc.__seatingComboAttachedV2 = true;
 
-                    targetDoc.addEventListener('pointerdown', (e) => {
+                    targetDoc.addEventListener('pointerdown', (e) => {{
                         if (e.isPrimary === false) return;
                         const btn = e.target && e.target.closest ? e.target.closest('button') : null;
                         if (!btn || btn.disabled) return;
                         const info = inspectSeatingBtn(btn);
-                        if (info) {
+                        if (info) {{
                             triggerLiveComboBubble(btn, info);
                             highlightSeatCardInstant(info.card);
-                        }
-                    }, true);
-                };
+                        }}
+                    }}, true);
+                }};
 
-# ==========================================
-# 2. 跨連線持久化共用狀態與輔助函式
-# ==========================================
-DATA_FILE = "class_draw_state.json"
-DEFAULT_ROSTERS_DIR = "default_rosters"
-DEFAULT_ROSTERS_JSON = "default_rosters.json"
-DEFAULT_PIN = "1234"
+                attachComboToDoc(doc);
+                doc.querySelectorAll('iframe').forEach((fr) => {{
+                    try {{ attachComboToDoc(fr.contentDocument); }} catch (e) {{}}
+                }});
 
-
-def create_empty_rosters():
-    return {
-        "slot_1": {"custom_name": "", "date_columns": [], "students": {}},
-        "slot_2": {"custom_name": "", "date_columns": [], "students": {}},
-        "slot_3": {"custom_name": "", "date_columns": [], "students": {}},
-    }
-
-
-def load_default_rosters_from_github():
-    """從 GitHub 倉庫預存的 default_rosters.json 或 default_rosters/*.csv 自動載入預設三班名單"""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
+                // 持續監聽動態新增的 iframe，確保局部刷新後依然有效
+                const obs = new MutationObserver(() => {{
+                    doc.querySelectorAll('iframe').forEach((fr) => {{
+                        try {{ attachComboToDoc(fr.contentDocument); }} catch (e) {{}}
+                    }});
+                }});
+                obs.observe(doc.body, {{ childList: true, subtree: true }});
+            }}
+        }} catch (e) {{}}
+    }})();
+    </script>
+    """,
+    height=0,
+    width=0,
+)
     result = {}
 
     # 1. 優先讀取 default_rosters.json（若倉庫有存放 JSON 預設名單）
