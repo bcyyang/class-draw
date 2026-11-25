@@ -440,30 +440,6 @@ components.html(
                     return rect;
                 }};
 
-                // 點擊瞬間零延遲切换青綠色高亮外框（與後端狀態同步）
-                const highlightSeatCardInstant = (btn) => {{
-                    if (!btn) return;
-                    const allDocs = [doc];
-                    doc.querySelectorAll('iframe').forEach((fr) => {{
-                        try {{ if (fr.contentDocument) allDocs.push(fr.contentDocument); }} catch (e) {{}}
-                    }});
-                    allDocs.forEach((d) => {{
-                        d.querySelectorAll('.last-adjusted').forEach((el) => {{
-                            el.classList.remove('last-adjusted');
-                        }});
-                    }});
-                    let cur = btn.parentElement;
-                    for (let i = 0; i < 10 && cur; i++) {{
-                        const card = cur.querySelector('.seat-card-box, .seat-card-empty');
-                        if (card) {{
-                            card.classList.remove('seat-card-empty');
-                            card.classList.add('seat-card-box', 'last-adjusted');
-                            break;
-                        }}
-                        cur = cur.parentElement;
-                    }}
-                }};
-
                 // 直接從按鈕所屬的座位卡片擷取「座號 + 姓名」，完全不依賴 help/title 屬性
                 const inspectSeatingBtn = (btn) => {{
                     if (!btn) return null;
@@ -473,12 +449,10 @@ components.html(
                     if (btn.hasAttribute('title')) btn.removeAttribute('title');
 
                     let studentLabel = '';
-                    let seatCard = null;
                     let cur = btn.parentElement;
                     for (let i = 0; i < 10 && cur; i++) {{
                         const card = cur.querySelector('.seat-card-box, .seat-card-empty');
                         if (card) {{
-                            seatCard = card;
                             const lines = (card.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean);
                             const seatLine = lines.find(l => /^\\d{{2}}$/.test(l)) || '';
                             const nameLine = lines.find(l => l !== seatLine && !l.startsWith('今日') && !l.includes('空位') && l.length <= 8 && !/[甲乙丙丁系科班組]/.test(l)) || '';
@@ -489,41 +463,7 @@ components.html(
                     }}
                     if (!studentLabel) studentLabel = '同學';
                     const step = txt.includes('➕') ? 1 : -1;
-                    return {{ studentLabel, step, seatCard }};
-                }};
-
-                // 點擊瞬間零延遲更新青綠色外框與卡片上的今日分數顯示
-                const applyInstantSeatVisual = (seatCard, step) => {{
-                    if (!seatCard) return;
-                    const allDocs = [doc];
-                    doc.querySelectorAll('iframe').forEach((fr) => {{
-                        try {{ if (fr.contentDocument) allDocs.push(fr.contentDocument); }} catch (e) {{}}
-                    }});
-                    allDocs.forEach((d) => {{
-                        d.querySelectorAll('.last-adjusted').forEach((el) => {{
-                            el.classList.remove('last-adjusted');
-                        }});
-                    }});
-
-                    if (seatCard.classList.contains('seat-card-empty')) {{
-                        const seatNum = (seatCard.innerText || '').trim().split('\\n')[0].trim();
-                        const nextSc = Math.max(0, step);
-                        seatCard.className = 'seat-card-box last-adjusted';
-                        seatCard.innerHTML =
-                            `<div style="font-size:0.72rem; font-weight:400; color:#64748b;">空位 / 未建檔</div>` +
-                            `<div style="font-size:1.3rem; font-weight:500; color:#0f172a; line-height:1.15; margin:2px 0;">${{seatNum}}</div>` +
-                            `<div style="margin-top:6px;"><span style="background:#059669; color:#ffffff; font-size:0.9rem; font-weight:800; padding:3px 10px; border-radius:999px; display:inline-block;">今日 ${{nextSc}} 分</span></div>`;
-                    }} else {{
-                        seatCard.classList.add('last-adjusted');
-                        const badge = seatCard.querySelector('span');
-                        if (badge && badge.textContent.includes('今日')) {{
-                            const m = badge.textContent.match(/\\d+/);
-                            const curSc = m ? parseInt(m[0], 10) : 0;
-                            const nextSc = Math.max(0, curSc + step);
-                            badge.textContent = `今日 ${{nextSc}} 分`;
-                            badge.style.background = '#059669';
-                        }}
-                    }}
+                    return {{ studentLabel, step }};
                 }};
 
                 const triggerLiveComboBubble = (btn, info) => {{
@@ -564,7 +504,6 @@ components.html(
                         const info = inspectSeatingBtn(btn);
                         if (info) {{
                             triggerLiveComboBubble(btn, info);
-                            applyInstantSeatVisual(info.seatCard, info.step);
                         }}
                     }}, true);
                 }};
@@ -725,39 +664,39 @@ def load_persisted_state():
             default_data["rosters"][sk] = github_defaults[sk]
             restored_any = True
 
-def save_persisted_state(state_obj, async_write: bool = False):
+        for seat_k, stu_v in default_data["rosters"][sk]["students"].items():
+            if isinstance(stu_v, dict):
+                stu_v.setdefault("records", {})
+                stu_v.setdefault("semester_total", sum(int(x) for x in stu_v["records"].values()))
+
+    if restored_any:
+        save_persisted_state(default_data)
+    return default_data
+
+
+def save_persisted_state(state_obj):
     try:
         payload = {
             "course_title": state_obj["course_title"],
             "round_id": state_obj["round_id"],
             "is_open": state_obj["is_open"],
-            "candidates": dict(state_obj["candidates"]),
-            "picked_history": dict(state_obj["picked_history"]),
-            "scores": dict(state_obj["scores"]),
+            "candidates": state_obj["candidates"],
+            "picked_history": state_obj["picked_history"],
+            "scores": state_obj["scores"],
             "round_points": state_obj["round_points"],
             "auto_award": state_obj["auto_award"],
-            "awarded_winners": list(state_obj["awarded_winners"]),
-            "last_winners": list(state_obj["last_winners"]),
+            "awarded_winners": state_obj["awarded_winners"],
+            "last_winners": state_obj["last_winners"],
             "student_share_url": state_obj["student_share_url"],
             "admin_pin": state_obj.get("admin_pin", DEFAULT_PIN),
             "active_slot": state_obj.get("active_slot", "slot_1"),
-            "rosters": json.loads(json.dumps(state_obj.get("rosters", create_empty_rosters()))),
+            "rosters": state_obj.get("rosters", create_empty_rosters()),
         }
-
-        def _write_disk():
-            try:
-                tmp_file = DATA_FILE + ".tmp"
-                with open(tmp_file, "w", encoding="utf-8") as f:
-                    json.dump(payload, f, ensure_ascii=False, indent=2)
-                os.replace(tmp_file, DATA_FILE)
-                state_obj["_last_disk_mtime"] = os.path.getmtime(DATA_FILE)
-            except Exception:
-                pass
-
-        if async_write:
-            threading.Thread(target=_write_disk, daemon=True).start()
-        else:
-            _write_disk()
+        tmp_file = DATA_FILE + ".tmp"
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_file, DATA_FILE)
+        state_obj["_last_disk_mtime"] = os.path.getmtime(DATA_FILE)
     except Exception:
         pass
 
@@ -1223,13 +1162,13 @@ def generate_sample_roster_csv() -> bytes:
 
 
 def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
-    """點擊座次表時直接加減該生今日暫存分數（記憶體即時更新＋背景非同步寫檔，零延遲不卡頓）"""
+    """點擊座次表時直接加減該生今日暫存分數"""
     with state["lock"]:
         old_val = int(state["scores"].get(seat, 0))
         new_val = max(0, old_val + delta)
         actual_delta = new_val - old_val
         state["scores"][seat] = new_val
-        save_persisted_state(state, async_write=True)
+        save_persisted_state(state)
 
     if record_undo and actual_delta != 0:
         st.session_state.seating_undo_stack.append((seat, actual_delta))
