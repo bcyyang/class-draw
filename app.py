@@ -440,6 +440,30 @@ components.html(
                     return rect;
                 }};
 
+                // 點擊瞬間零延遲切换青綠色高亮外框（與後端狀態同步）
+                const highlightSeatCardInstant = (btn) => {{
+                    if (!btn) return;
+                    const allDocs = [doc];
+                    doc.querySelectorAll('iframe').forEach((fr) => {{
+                        try {{ if (fr.contentDocument) allDocs.push(fr.contentDocument); }} catch (e) {{}}
+                    }});
+                    allDocs.forEach((d) => {{
+                        d.querySelectorAll('.last-adjusted').forEach((el) => {{
+                            el.classList.remove('last-adjusted');
+                        }});
+                    }});
+                    let cur = btn.parentElement;
+                    for (let i = 0; i < 10 && cur; i++) {{
+                        const card = cur.querySelector('.seat-card-box, .seat-card-empty');
+                        if (card) {{
+                            card.classList.remove('seat-card-empty');
+                            card.classList.add('seat-card-box', 'last-adjusted');
+                            break;
+                        }}
+                        cur = cur.parentElement;
+                    }}
+                }};
+
                 // 直接從按鈕所屬的座位卡片擷取「座號 + 姓名」，完全不依賴 help/title 屬性
                 const inspectSeatingBtn = (btn) => {{
                     if (!btn) return null;
@@ -503,6 +527,7 @@ components.html(
                         if (!btn || btn.disabled) return;
                         const info = inspectSeatingBtn(btn);
                         if (info) {{
+                            highlightSeatCardInstant(btn);
                             triggerLiveComboBubble(btn, info);
                         }}
                     }}, true);
