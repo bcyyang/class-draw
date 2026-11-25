@@ -578,7 +578,6 @@ def load_default_rosters_from_github():
 
     if candidate_csvs:
         slot_order = ["slot_1", "slot_2", "slot_3"]
-        # 若檔名有明確標示 slot_1 / 1 / 班級1 等，優先對號入座
         unassigned = []
         for fpath in candidate_csvs:
             bname = os.path.basename(fpath)
@@ -646,7 +645,6 @@ def load_persisted_state():
     if not isinstance(default_data.get("rosters"), dict):
         default_data["rosters"] = create_empty_rosters()
 
-    # 若任何班級名單為空（例如容器重啟清空暫存），自動從 GitHub 預存的 default_rosters 回補
     github_defaults = load_default_rosters_from_github()
     restored_any = False
 
@@ -1753,6 +1751,7 @@ if st.session_state.view_mode == "admin":
                 if date_cols:
                     recent_str = "、".join(date_cols[-6:])
                     more_str = f" 等共 {len(date_cols)} 次" if len(date_cols) > 6 else ""
+
         # 2. 渲染 8 列 × 8 欄座次表（採用局部刷新與低頻輪詢，大幅消除手機/平板連續點擊加減分的 Lag）
         @st.fragment(run_every=6)
         def live_seating_grid():
@@ -2482,6 +2481,15 @@ else:
                     st.success(f"🎉 恭喜 **{clean_seat} 號**！你是 **第 {winner_rank} 位** 中籤發言同學，請準備回答！")
                 elif already_in_pool:
                     st.info(f"🙋 **{clean_seat} 號** 已在「第 {cur_round} 題」舉手名單中，請靜候老師抽籤！")
+                    if is_open:
+                        if st.button("↩️ 取消舉手（退出抽籤）", use_container_width=True, key="stu_cancel_raise_btn"):
+                            with state["lock"]:
+                                if not state["is_open"]:
+                                    st.warning("老師已經截止本題報名，無法取消囉！")
+                                else:
+                                    state["candidates"].pop(clean_seat, None)
+                                    save_persisted_state(state)
+                            st.rerun()
                 elif not is_open:
                     st.warning("⏸️ 本題目前暫停舉手報名，請等待老師開啟下一題。")
                 else:
