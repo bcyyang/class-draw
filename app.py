@@ -465,33 +465,33 @@ components.html(
                 }};
 
                 // 直接從按鈕所屬的座位卡片擷取「座號 + 姓名」，完全不依賴 help/title 屬性
-                const findSeatCardFromBtn = (btn) => {
+                const findSeatCardFromBtn = (btn) => {{
                     let cur = btn ? btn.parentElement : null;
-                    for (let i = 0; i < 12 && cur; i++) {
+                    for (let i = 0; i < 12 && cur; i++) {{
                         const card = cur.querySelector('.seat-card-box, .seat-card-empty');
                         if (card) return card;
                         cur = cur.parentElement;
-                    }
+                    }}
                     return null;
-                };
+                }};
 
                 // 點擊瞬間零延遲切換青綠色高亮外框（與後端狀態同步）
-                const highlightSeatCardInstant = (card) => {
+                const highlightSeatCardInstant = (card) => {{
                     if (!card) return;
                     const allDocs = [doc];
-                    doc.querySelectorAll('iframe').forEach((fr) => {
-                        try { if (fr.contentDocument) allDocs.push(fr.contentDocument); } catch (e) {}
-                    });
-                    allDocs.forEach((d) => {
-                        d.querySelectorAll('.last-adjusted').forEach((el) => {
+                    doc.querySelectorAll('iframe').forEach((fr) => {{
+                        try {{ if (fr.contentDocument) allDocs.push(fr.contentDocument); }} catch (e) {{}}
+                    }});
+                    allDocs.forEach((d) => {{
+                        d.querySelectorAll('.last-adjusted').forEach((el) => {{
                             el.classList.remove('last-adjusted');
-                        });
-                    });
+                        }});
+                    }});
                     card.classList.remove('seat-card-empty');
                     card.classList.add('seat-card-box', 'last-adjusted');
-                };
+                }};
 
-                const inspectSeatingBtn = (btn) => {
+                const inspectSeatingBtn = (btn) => {{
                     if (!btn) return null;
                     const txt = (btn.innerText || btn.textContent || '').trim();
                     if (!txt.includes('➕') && !txt.includes('➖')) return null;
@@ -500,18 +500,18 @@ components.html(
 
                     let studentLabel = '';
                     const card = findSeatCardFromBtn(btn);
-                    if (card) {
-                        const lines = (card.innerText || '').split('\n').map(s => s.trim()).filter(Boolean);
-                        const seatLine = lines.find(l => /^\d{2}$/.test(l)) || '';
+                    if (card) {{
+                        const lines = (card.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean);
+                        const seatLine = lines.find(l => /^\\d{{2}}$/.test(l)) || '';
                         const nameLine = lines.find(l => l !== seatLine && !l.startsWith('今日') && !l.includes('空位') && l.length <= 8 && !/[甲乙丙丁系科班組]/.test(l)) || '';
-                        studentLabel = `${seatLine} ${nameLine}`.trim();
-                    }
+                        studentLabel = `${{seatLine}} ${{nameLine}}`.trim();
+                    }}
                     if (!studentLabel) studentLabel = '同學';
                     const step = txt.includes('➕') ? 1 : -1;
-                    return { studentLabel, step, card };
-                };
+                    return {{ studentLabel, step, card }};
+                }};
 
-                const triggerLiveComboBubble = (btn, info) => {
+                const triggerLiveComboBubble = (btn, info) => {{
                     if (comboStudent === info.studentLabel && comboPill.classList.contains('visible')) {
                         comboCount += info.step;
                     } else {
