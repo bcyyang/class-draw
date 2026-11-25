@@ -229,6 +229,11 @@ st.markdown(
         background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
         border-color: #f59e0b;
     }
+    .seat-card-box.last-adjusted {
+        background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%) !important;
+        border: 3px solid #10b981 !important;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25), 0 6px 14px rgba(16, 185, 129, 0.2) !important;
+    }
     .seat-card-empty {
         border-radius: 14px;
         padding: 18px 6px;
@@ -977,6 +982,8 @@ if "student_url_input" not in st.session_state:
     st.session_state.student_url_input = state["student_share_url"]
 if "seating_undo_stack" not in st.session_state:
     st.session_state.seating_undo_stack = []
+if "last_adjusted_seat" not in st.session_state:
+    st.session_state.last_adjusted_seat = ""
 if "uploader_reset_ids" not in st.session_state:
     st.session_state.uploader_reset_ids = {"slot_1": 0, "slot_2": 0, "slot_3": 0}
 if "settle_date_label" not in st.session_state:
@@ -1024,6 +1031,7 @@ def reset_entire_classroom():
         save_persisted_state(state)
     st.session_state.confirm_new_class = False
     st.session_state.seating_undo_stack = []
+    st.session_state.last_adjusted_seat = ""
     st.session_state["new_class_toast"] = True
 
 
@@ -1034,6 +1042,7 @@ def switch_active_class_slot(slot_key: str):
         state["active_slot"] = slot_key
         save_persisted_state(state)
     st.session_state.seating_undo_stack = []
+    st.session_state.last_adjusted_seat = ""
     st.session_state["class_switched_toast"] = f"🔄 已切換至「{get_slot_display_title(state, slot_key)}」"
 
 
@@ -1165,6 +1174,9 @@ def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
         st.session_state.seating_undo_stack.append((seat, actual_delta))
         if len(st.session_state.seating_undo_stack) > 30:
             st.session_state.seating_undo_stack.pop(0)
+
+    if actual_delta != 0:
+        st.session_state.last_adjusted_seat = seat
 
     stu_info = get_active_roster(state).get(seat, {})
     stu_name = stu_info.get("name", "")
@@ -1813,13 +1825,16 @@ if st.session_state.view_mode == "admin":
                     seat_str = f"{seat_int:02d}"
                     stu_info = cur_roster.get(seat_str)
                     cur_score = int(state["scores"].get(seat_str, 0))
+                    is_last_adj = (st.session_state.get("last_adjusted_seat", "") == seat_str)
 
                     with row_cols[target_col_idx]:
                         if stu_info:
                             cls_label = stu_info.get("class_name", "") or "　"
                             name_label = stu_info.get("name", "") or "未命名"
                             card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-box"
-                            score_badge_bg = "#d97706" if cur_score > 0 else "#64748b"
+                            if is_last_adj:
+                                card_cls += " last-adjusted"
+                            score_badge_bg = "#059669" if is_last_adj else ("#d97706" if cur_score > 0 else "#64748b")
                             st.markdown(
                                 f'<div class="{card_cls}">'
                                 f'<div style="font-size:0.72rem; font-weight:400; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{cls_label}</div>'
@@ -1850,12 +1865,15 @@ if st.session_state.view_mode == "admin":
                                     st.rerun(scope="fragment")
                         else:
                             card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-empty"
-                            if cur_score > 0:
+                            if is_last_adj:
+                                card_cls = "seat-card-box last-adjusted"
+                            if cur_score > 0 or is_last_adj:
+                                badge_color = "#059669" if is_last_adj else "#d97706"
                                 st.markdown(
                                     f'<div class="{card_cls}">'
                                     f'<div style="font-size:0.72rem; font-weight:400; color:#64748b;">空位 / 未建檔</div>'
                                     f'<div style="font-size:1.3rem; font-weight:500; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
-                                    f'<div style="margin-top:6px;"><span style="background:#d97706; color:#ffffff; font-size:0.9rem; font-weight:800; padding:3px 10px; border-radius:999px; display:inline-block;">今日 {cur_score} 分</span></div>'
+                                    f'<div style="margin-top:6px;"><span style="background:{badge_color}; color:#ffffff; font-size:0.9rem; font-weight:800; padding:3px 10px; border-radius:999px; display:inline-block;">今日 {cur_score} 分</span></div>'
                                     f'</div>',
                                     unsafe_allow_html=True,
                                 )
