@@ -465,7 +465,33 @@ components.html(
                 }};
 
                 // 直接從按鈕所屬的座位卡片擷取「座號 + 姓名」，完全不依賴 help/title 屬性
-                const inspectSeatingBtn = (btn) => {{
+                const findSeatCardFromBtn = (btn) => {
+                    let cur = btn ? btn.parentElement : null;
+                    for (let i = 0; i < 12 && cur; i++) {
+                        const card = cur.querySelector('.seat-card-box, .seat-card-empty');
+                        if (card) return card;
+                        cur = cur.parentElement;
+                    }
+                    return null;
+                };
+
+                // 點擊瞬間零延遲切換青綠色高亮外框（與後端狀態同步）
+                const highlightSeatCardInstant = (card) => {
+                    if (!card) return;
+                    const allDocs = [doc];
+                    doc.querySelectorAll('iframe').forEach((fr) => {
+                        try { if (fr.contentDocument) allDocs.push(fr.contentDocument); } catch (e) {}
+                    });
+                    allDocs.forEach((d) => {
+                        d.querySelectorAll('.last-adjusted').forEach((el) => {
+                            el.classList.remove('last-adjusted');
+                        });
+                    });
+                    card.classList.remove('seat-card-empty');
+                    card.classList.add('seat-card-box', 'last-adjusted');
+                };
+
+                const inspectSeatingBtn = (btn) => {
                     if (!btn) return null;
                     const txt = (btn.innerText || btn.textContent || '').trim();
                     if (!txt.includes('➕') && !txt.includes('➖')) return null;
@@ -473,34 +499,29 @@ components.html(
                     if (btn.hasAttribute('title')) btn.removeAttribute('title');
 
                     let studentLabel = '';
-                    let cur = btn.parentElement;
-                    for (let i = 0; i < 10 && cur; i++) {{
-                        const card = cur.querySelector('.seat-card-box, .seat-card-empty');
-                        if (card) {{
-                            const lines = (card.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean);
-                            const seatLine = lines.find(l => /^\\d{{2}}$/.test(l)) || '';
-                            const nameLine = lines.find(l => l !== seatLine && !l.startsWith('今日') && !l.includes('空位') && l.length <= 8 && !/[甲乙丙丁系科班組]/.test(l)) || '';
-                            studentLabel = `${{seatLine}} ${{nameLine}}`.trim();
-                            break;
-                        }}
-                        cur = cur.parentElement;
-                    }}
+                    const card = findSeatCardFromBtn(btn);
+                    if (card) {
+                        const lines = (card.innerText || '').split('\n').map(s => s.trim()).filter(Boolean);
+                        const seatLine = lines.find(l => /^\d{2}$/.test(l)) || '';
+                        const nameLine = lines.find(l => l !== seatLine && !l.startsWith('今日') && !l.includes('空位') && l.length <= 8 && !/[甲乙丙丁系科班組]/.test(l)) || '';
+                        studentLabel = `${seatLine} ${nameLine}`.trim();
+                    }
                     if (!studentLabel) studentLabel = '同學';
                     const step = txt.includes('➕') ? 1 : -1;
-                    return {{ studentLabel, step }};
-                }};
+                    return { studentLabel, step, card };
+                };
 
-                const triggerLiveComboBubble = (btn, info) => {{
-                    if (comboStudent === info.studentLabel && comboPill.classList.contains('visible')) {{
+                const triggerLiveComboBubble = (btn, info) => {
+                    if (comboStudent === info.studentLabel && comboPill.classList.contains('visible')) {
                         comboCount += info.step;
-                    }} else {{
+                    } else {
                         comboStudent = info.studentLabel;
                         comboCount = info.step;
-                    }}
+                    }
 
                     const rect = getScreenRectInTopWin(btn);
-                    const signText = comboCount > 0 ? `+${{comboCount}} 分` : `${{comboCount}} 分`;
-                    comboPill.textContent = `${{comboStudent}}  ${{signText}}`;
+                    const signText = comboCount > 0 ? `+${comboCount} 分` : `${comboCount} 分`;
+                    comboPill.textContent = `${comboStudent}  ${signText}`;
                     comboPill.classList.toggle('sub-mode', comboCount < 0);
                     comboPill.style.left = (rect.left + rect.width / 2) + 'px';
                     comboPill.style.top = (Math.max(54, rect.top - 10)) + 'px';
@@ -510,49 +531,28 @@ components.html(
                     comboPill.classList.add('visible');
 
                     if (comboHideTimer) win.clearTimeout(comboHideTimer);
-                    comboHideTimer = win.setTimeout(() => {{
+                    comboHideTimer = win.setTimeout(() => {
                         comboPill.classList.remove('visible');
                         comboStudent = '';
                         comboCount = 0;
-                    }}, 1800);
-                }};
+                    }, 1800);
+                };
 
-                const attachComboToDoc = (targetDoc) => {{
+                const attachComboToDoc = (targetDoc) => {
                     if (!targetDoc || targetDoc.__seatingComboAttachedV2) return;
                     targetDoc.__seatingComboAttachedV2 = true;
 
-                    targetDoc.addEventListener('pointerdown', (e) => {{
+                    targetDoc.addEventListener('pointerdown', (e) => {
                         if (e.isPrimary === false) return;
                         const btn = e.target && e.target.closest ? e.target.closest('button') : null;
                         if (!btn || btn.disabled) return;
                         const info = inspectSeatingBtn(btn);
-                        if (info) {{
-                            highlightSeatCardInstant(btn);
+                        if (info) {
                             triggerLiveComboBubble(btn, info);
-                        }}
-                    }}, true);
-                }};
-
-                attachComboToDoc(doc);
-                doc.querySelectorAll('iframe').forEach((fr) => {{
-                    try {{ attachComboToDoc(fr.contentDocument); }} catch (e) {{}}
-                }});
-
-                // 持續監聽動態新增的 iframe，確保局部刷新後依然有效
-                const obs = new MutationObserver(() => {{
-                    doc.querySelectorAll('iframe').forEach((fr) => {{
-                        try {{ attachComboToDoc(fr.contentDocument); }} catch (e) {{}}
-                    }});
-                }});
-                obs.observe(doc.body, {{ childList: true, subtree: true }});
-            }}
-        }} catch (e) {{}}
-    }})();
-    </script>
-    """,
-    height=0,
-    width=0,
-)
+                            highlightSeatCardInstant(info.card);
+                        }
+                    }, true);
+                };
 
 # ==========================================
 # 2. 跨連線持久化共用狀態與輔助函式
