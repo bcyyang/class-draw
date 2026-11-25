@@ -926,7 +926,6 @@ def load_default_rosters_from_github():
         csv_files = sorted(glob.glob(os.path.join(default_dir, "*.csv")))
 
     if not csv_files:
-        # 尋找倉庫根目錄下符合 slot_1 / roster_1 或一般班級名單的 CSV（排除空白範本）
         all_root_csv = sorted(glob.glob(os.path.join(base_dir, "*.csv")))
         csv_files = [
             p for p in all_root_csv
