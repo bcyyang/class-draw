@@ -574,6 +574,27 @@ components.html(
     height=0,
     width=0,
 )
+
+# ==========================================
+# 2. 跨連線持久化共用狀態與輔助函式
+# ==========================================
+DATA_FILE = "class_draw_state.json"
+DEFAULT_ROSTERS_DIR = "default_rosters"
+DEFAULT_ROSTERS_JSON = "default_rosters.json"
+DEFAULT_PIN = "1234"
+
+
+def create_empty_rosters():
+    return {
+        "slot_1": {"custom_name": "", "date_columns": [], "students": {}},
+        "slot_2": {"custom_name": "", "date_columns": [], "students": {}},
+        "slot_3": {"custom_name": "", "date_columns": [], "students": {}},
+    }
+
+
+def load_default_rosters_from_github():
+    """從 GitHub 倉庫預存的 default_rosters.json 或 default_rosters/*.csv 自動載入預設三班名單"""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     result = {}
 
     # 1. 優先讀取 default_rosters.json（若倉庫有存放 JSON 預設名單）
