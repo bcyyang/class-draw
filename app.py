@@ -976,6 +976,13 @@ def ensure_default_rosters_populated(rosters_dict: dict) -> tuple[dict, bool]:
             elif not isinstance(cur_slot, dict):
                 rosters_dict[slot] = {"label": f"班級 {idx + 1}", "students": {}, "dates": []}
                 changed = True
+        else:
+            if "label" not in cur_slot or not cur_slot["label"]:
+                cur_slot["label"] = f"班級 {idx + 1}"
+                changed = True
+            if "dates" not in cur_slot:
+                cur_slot["dates"] = []
+                changed = True
     return rosters_dict, changed
 
 
@@ -1877,11 +1884,15 @@ else:
 
             with mgmt_c2:
                 st.markdown("**② 匯入名單或上週累計總表 (.csv)**")
+                slot_idx_map = {"slot_1": "班級 1", "slot_2": "班級 2", "slot_3": "班級 3"}
                 target_slot = st.selectbox(
                     "選擇要匯入的班級位置",
                     options=["slot_1", "slot_2", "slot_3"],
-                    index=["slot_1", "slot_2", "slot_3"].index(active_slot),
-                    format_func=lambda k: f"{state['rosters'][k]['label']}（目前 {len(state['rosters'][k]['students'])} 人）",
+                    index=["slot_1", "slot_2", "slot_3"].index(active_slot) if active_slot in slot_idx_map else 0,
+                    format_func=lambda k: (
+                        f"{state['rosters'].get(k, {}).get('label', slot_idx_map.get(k, k))}"
+                        f"（目前 {len(state['rosters'].get(k, {}).get('students', {}))} 人）"
+                    ),
                 )
                 uploaded_csv = st.file_uploader(
                     "上傳 CSV（可匯入新名單或先前下載的累計總表）",
