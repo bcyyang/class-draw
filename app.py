@@ -504,7 +504,9 @@ components.html(
                     comboPill.textContent = `${{comboStudent}}  ${{signText}}`;
                     comboPill.classList.toggle('sub-mode', comboCount < 0);
                     comboPill.style.left = (rect.left + rect.width / 2) + 'px';
-                    comboPill.style.top = (Math.max(54, rect.top - 10)) + 'px';
+                    // 往上移到卡片中上方的姓名位置（避開下方「今日X分」徽章）
+                    const nameAnchorTop = rect.top - 78;
+                    comboPill.style.top = (Math.max(54, nameAnchorTop)) + 'px';
 
                     comboPill.classList.remove('visible');
                     void comboPill.offsetWidth;
