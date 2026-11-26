@@ -445,8 +445,8 @@ components.html(
                     for (let i = 0; i < 10 && cur; i++) {{
                         const card = cur.querySelector('.seat-card-box, .seat-card-empty');
                         if (card) {{
-                            const lines = (card.innerText || '').split('\n').map(s => s.trim()).filter(Boolean);
-                            const seatLine = lines.find(l => /^\d{{2}}$/.test(l)) || '';
+                            const lines = (card.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean);
+                            const seatLine = lines.find(l => /^\\d{{2}}$/.test(l)) || '';
                             const nameLine = lines.find(l => l !== seatLine && !l.startsWith('今日') && !l.includes('空位') && l.length <= 8 && !/[甲乙丙丁系科班組]/.test(l)) || '';
                             studentLabel = `${{seatLine}} ${{nameLine}}`.trim();
                             break;
