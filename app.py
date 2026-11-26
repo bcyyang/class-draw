@@ -1753,7 +1753,7 @@ if st.session_state.view_mode == "admin":
                     more_str = f" 等共 {len(date_cols)} 次" if len(date_cols) > 6 else ""
 
         # 2. 渲染 8 列 × 8 欄座次表（採用局部刷新與低頻輪詢，大幅消除手機/平板連續點擊加減分的 Lag）
-        @st.fragment(run_every=6)
+        @st.fragment(run_every=10)
         def live_seating_grid():
             sync_state_from_disk_if_newer(state)
             cur_roster = get_active_roster(state)
@@ -1895,7 +1895,7 @@ if st.session_state.view_mode == "admin":
 
     with left_col:
 
-        @st.fragment(run_every=2)
+        @st.fragment(run_every=10)
         def live_admin_left_board():
             pts_now = int(state.get("round_points", 1))
             awarded_now = set(state.get("awarded_winners", []))
@@ -2151,7 +2151,7 @@ if st.session_state.view_mode == "admin":
                     st.session_state.play_fanfare_once = sound_on
                     st.rerun()
 
-        @st.fragment(run_every=2)
+        @st.fragment(run_every=10)
         def live_admin_scoreboard_card():
             sync_state_from_disk_if_newer(state)
             with st.container(border=True):
@@ -2374,7 +2374,7 @@ else:
     _, stu_col, _ = st.columns([1, 1.45, 1])
     with stu_col:
 
-        @st.fragment(run_every=2)
+        @st.fragment(run_every=10)
         def live_student_panel():
             sync_state_from_disk_if_newer(state)
             cur_round = state["round_id"]
