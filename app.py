@@ -215,36 +215,35 @@ st.markdown(
         border-radius: 999px;
         margin-top: 10px;
     }
-    /* 學生端中籤通知卡片（與老師端聚光燈深靛藍＋金黃徽章風格一致） */
+    /* 學生端中籤通知卡片（與老師端中籤金色卡片 .winner-pill 完全一致：金黃漸層底色＋深褐徽章＋深靛黑大字） */
     .student-winner-banner {
-        background: linear-gradient(135deg, #312e81 0%, #1e1b4b 55%, #0f172a 100%);
-        border: 3px solid #facc15;
-        border-radius: 20px;
+        background: linear-gradient(180deg, #fde047 0%, #facc15 100%);
+        border: 3px solid #ffffff;
+        border-radius: 22px;
         padding: 18px 16px;
-        color: #ffffff;
+        color: #0f172a;
         text-align: center;
         margin-bottom: 12px;
-        box-shadow: 0 12px 26px rgba(30, 27, 75, 0.25);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
     }
     .student-winner-rank-badge {
         display: inline-block;
-        background: linear-gradient(180deg, #fde047 0%, #facc15 100%);
-        color: #0f172a;
-        border: 2px solid #ffffff;
-        font-size: 0.92rem;
+        background: #78350f;
+        color: #fef08a;
+        font-size: 0.95rem;
         font-weight: 900;
-        padding: 3px 14px;
+        padding: 4px 16px;
         border-radius: 999px;
-        letter-spacing: 0.05em;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+        letter-spacing: 0.06em;
+        line-height: 1.25;
     }
     .student-winner-seat-num {
-        font-size: 2.35rem;
+        font-size: 2.65rem;
         font-weight: 900;
-        color: #fde047;
-        line-height: 1.05;
+        color: #0f172a;
+        line-height: 1.02;
         margin: 8px 0 4px 0;
-        letter-spacing: 0.03em;
+        letter-spacing: 0.02em;
     }
     /* 座次表專屬樣式 */
     .seat-card-box {
@@ -2516,8 +2515,8 @@ else:
                         f'<div class="student-winner-banner">'
                         f'<span class="student-winner-rank-badge">🏆 第 {winner_rank} 位中籤</span>'
                         f'<div class="student-winner-seat-num">{clean_seat} 號{name_line}</div>'
-                        f'<div style="color:#fde047; font-size:0.98rem; font-weight:800; margin-top:2px;">🎉 恭喜獲得本題發言機會，請準備回答！</div>'
-                        f'<div style="margin-top:8px;"><span style="background:rgba(253,224,71,0.18); border:1px solid rgba(253,224,71,0.55); color:#fde047; font-size:0.82rem; font-weight:800; padding:3px 12px; border-radius:999px;">⭐ 本題配分：{pts_for_round} 分</span></div>'
+                        f'<div style="color:#0f172a; font-size:1.02rem; font-weight:900; margin-top:4px;">🎉 恭喜獲得本題發言機會，請準備回答！</div>'
+                        f'<div style="margin-top:8px;"><span style="background:rgba(15,23,42,0.12); color:#422006; font-size:0.82rem; font-weight:800; padding:3px 12px; border-radius:999px;">⭐ 本題配分：{pts_for_round} 分</span></div>'
                         f'</div>',
                         unsafe_allow_html=True,
                     )
