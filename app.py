@@ -673,7 +673,7 @@ def load_persisted_state():
         "auto_award": True,
         "awarded_winners": [],
         "last_winners": [],
-        "student_share_url": "https://class-draw-h29xuk6i83y2w4f4w5dpgn.streamlit.app/",
+        "student_share_url": "https://class-draw-zxzusy7bhdm3mshdzj5yxf.streamlit.app/",
         "admin_pin": DEFAULT_PIN,
         "active_slot": "slot_1",
         "rosters": create_empty_rosters(),
@@ -985,7 +985,7 @@ qp_tab = st.query_params.get("tab", "")
 if "view_mode" not in st.session_state:
     st.session_state.view_mode = "admin" if qp_mode == "admin" else "student"
 if "admin_unlocked" not in st.session_state:
-    st.session_state.admin_unlocked = bool(qp_mode == "admin" and qp_auth == "1")
+    st.session_state.admin_unlocked = False
 if "admin_tab" not in st.session_state:
     st.session_state.admin_tab = "seating" if qp_tab == "seating" else "draw"
 if "draw_mode" not in st.session_state:
@@ -1352,7 +1352,7 @@ def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, 
 nav_col1, nav_col2, nav_col3 = st.columns([8.2, 0.9, 0.9])
 with nav_col1:
     st.markdown(
-        '<div style="font-size:0.78rem; color:#64748b; padding-top:4px;">💡 同網址雙模式：預設為學生端；網址加 <code>?mode=admin</code> 即為老師端 · <span style="background:#dcfce7; color:#166534; font-weight:800; padding:1px 8px; border-radius:999px;">v4.0 學期累計總表版</span></div>',
+        '<div style="font-size:0.78rem; color:#64748b; padding-top:4px;">💡 同網址雙模式：預設為學生端；網址加 <code>?mode=admin</code> 即為老師端 · <span style="background:#dcfce7; color:#166534; font-weight:800; padding:1px 8px; border-radius:999px;">v7.0 學期累計總表版</span></div>',
         unsafe_allow_html=True,
     )
 with nav_col2:
@@ -1388,8 +1388,6 @@ if st.session_state.view_mode == "admin":
     if not st.session_state.admin_unlocked:
         _, lock_col, _ = st.columns([1, 1.4, 1])
         with lock_col:
-            st.markdown("### 🔒 老師主控台解鎖")
-            st.caption("請輸入老師密碼（預設為 `1234`，解鎖後本機連線期間將自動記住）")
             pin_val = st.text_input("請輸入老師密碼", type="password", max_chars=12)
             if st.button("確認解鎖", type="primary", use_container_width=True):
                 current_pin = str(state.get("admin_pin", DEFAULT_PIN)).strip()
@@ -1401,14 +1399,6 @@ if st.session_state.view_mode == "admin":
                     st.rerun()
                 else:
                     st.error("密碼錯誤，請重新輸入！")
-
-            with st.expander("❓ 忘記密碼？重設為預設密碼 (1234)"):
-                st.caption("若忘記先前自訂的老師密碼，可在此將密碼重設回預設值 `1234`（不會清除課堂分數與名單）。")
-                if st.button("🔄 重設密碼為 1234", use_container_width=True, key="forgot_reset_pin_btn"):
-                    with state["lock"]:
-                        state["admin_pin"] = DEFAULT_PIN
-                        save_persisted_state(state)
-                    st.success("✅ 密碼已重設為 `1234`，請在上方輸入 `1234` 解鎖！")
         st.stop()
 
     # --- 頂部課程標題與開題控制列 ---
