@@ -1019,7 +1019,7 @@ if "student_last_known_score" not in st.session_state:
 if "student_score_gain_banner" not in st.session_state:
     st.session_state.student_score_gain_banner = None
 if "student_url_input" not in st.session_state:
-    st.session_state.student_url_input = state["student_share_url"]
+    st.session_state.student_url_input = state.get("student_share_url", "https://class-draw-zxzusy7bhdm3mshdzj5yxf.streamlit.app/")
 if "seating_undo_stack" not in st.session_state:
     st.session_state.seating_undo_stack = []
 if "uploader_reset_ids" not in st.session_state:
@@ -1352,7 +1352,7 @@ def render_spotlight_html(winners, rolling=False, total_pool=0, round_points=1, 
 nav_col1, nav_col2, nav_col3 = st.columns([8.2, 0.9, 0.9])
 with nav_col1:
     st.markdown(
-        '<div style="font-size:0.78rem; color:#64748b; padding-top:4px;">💡 同網址雙模式：預設為學生端；網址加 <code>?mode=admin</code> 即為老師端 · <span style="background:#dcfce7; color:#166534; font-weight:800; padding:1px 8px; border-radius:999px;">v7.0 學期累計總表版</span></div>',
+        '<div style="font-size:0.78rem; color:#64748b; padding-top:4px;">💡 同網址雙模式：預設為學生端；網址加 <code>?mode=admin</code> 即為老師端 · <span style="background:#dcfce7; color:#166534; font-weight:800; padding:1px 8px; border-radius:999px;">v8.0 學期累計總表版</span></div>',
         unsafe_allow_html=True,
     )
 with nav_col2:
@@ -2400,23 +2400,39 @@ if st.session_state.view_mode == "admin":
 
         with st.container(border=True):
             st.markdown("#### 📱 學生手機掃碼加入")
-            share_url = st.text_input(
-                "學生端網址（自動過濾老師端參數，確保掃碼直接進入學生端）",
-                value=st.session_state.student_url_input,
-            )
-            clean_student_url = share_url.strip().split("?")[0]
-            if clean_student_url != st.session_state.student_url_input:
-                st.session_state.student_url_input = clean_student_url
-                with state["lock"]:
-                    state["student_share_url"] = clean_student_url
-                    save_persisted_state(state)
-            if clean_student_url:
-                qr_b64 = generate_qr_base64(clean_student_url)
+            saved_share_url = str(state.get("student_share_url", "https://class-draw-zxzusy7bhdm3mshdzj5yxf.streamlit.app/")).strip().split("?")[0].split("#")[0]
+            if "student_url_input" not in st.session_state or not st.session_state.student_url_input:
+                st.session_state.student_url_input = saved_share_url
+
+            url_c1, url_c2 = st.columns([3.2, 1.2])
+            with url_c1:
+                share_url = st.text_input(
+                    "學生端網址（自動過濾參數，確保掃碼直接進入學生端）",
+                    key="student_url_input",
+                    label_visibility="collapsed",
+                    placeholder="輸入學生端網址，例如 https://...",
+                )
+            with url_c2:
+                apply_url_clicked = st.button("套用網址", use_container_width=True, key="apply_student_qr_url_btn")
+
+            clean_input_url = share_url.strip().split("?")[0].split("#")[0]
+            if apply_url_clicked or (clean_input_url and clean_input_url != saved_share_url):
+                if clean_input_url:
+                    with state["lock"]:
+                        state["student_share_url"] = clean_input_url
+                        save_persisted_state(state)
+                    saved_share_url = clean_input_url
+                    if apply_url_clicked:
+                        st.toast("✅ 已更新學生端網址與 QR Code！")
+
+            active_qr_url = saved_share_url or clean_input_url
+            if active_qr_url:
+                qr_b64 = generate_qr_base64(active_qr_url)
                 st.markdown(
                     f'<div style="text-align:center; padding:4px 0;"><img src="data:image/png;base64,{qr_b64}" width="150" style="border-radius:12px; border:1px solid #e2e8f0; padding:6px; background:#fff;"/></div>',
                     unsafe_allow_html=True,
                 )
-                st.caption(f"🔗 學生端網址：`{clean_student_url}`")
+                st.caption(f"🔗 QR Code 實際指向：`{active_qr_url}`")
 
     # 固定在整個頁面最底部（左右兩欄之外）播放中獎音效
     if st.session_state.play_fanfare_once:
