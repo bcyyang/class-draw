@@ -259,6 +259,19 @@ st.markdown(
         background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
         border-color: #f59e0b;
     }
+    .seat-card-box.recent-hit {
+        background: linear-gradient(180deg, #fde68a 0%, #f59e0b 100%) !important;
+        border-color: #b45309 !important;
+        box-shadow: 0 0 0 2.5px rgba(245, 158, 11, 0.35), 0 8px 18px rgba(180, 83, 9, 0.24) !important;
+        transition: all 0.25s ease;
+    }
+    .seat-card-empty.recent-hit {
+        background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%) !important;
+        border: 2px solid #475569 !important;
+        color: #0f172a !important;
+        box-shadow: 0 0 0 2.5px rgba(71, 85, 105, 0.22), 0 6px 14px rgba(15, 23, 42, 0.16) !important;
+        transition: all 0.25s ease;
+    }
     .seat-card-empty {
         border-radius: 14px;
         padding: 18px 6px;
@@ -1185,13 +1198,19 @@ def generate_sample_roster_csv() -> bytes:
 
 
 def adjust_seat_score(seat: str, delta: int, record_undo: bool = True):
-    """點擊座次表時直接加減該生今日暫存分數"""
+    """點擊座次表時直接加減該生今日暫存分數，並記錄約 5 秒的方框深色提示"""
     with state["lock"]:
         old_val = int(state["scores"].get(seat, 0))
         new_val = max(0, old_val + delta)
         actual_delta = new_val - old_val
         state["scores"][seat] = new_val
         save_persisted_state(state)
+
+    if record_undo:
+        st.session_state["seating_recent_highlight"] = {
+            "seat": seat,
+            "until": time.time() + 5.0,
+        }
 
     if record_undo and actual_delta != 0:
         st.session_state.seating_undo_stack.append((seat, actual_delta))
@@ -1794,6 +1813,14 @@ if st.session_state.view_mode == "admin":
             if toast_msg:
                 st.toast(toast_msg)
 
+            highlight_info = st.session_state.get("seating_recent_highlight")
+            highlight_seat = ""
+            if isinstance(highlight_info, dict):
+                if time.time() <= float(highlight_info.get("until", 0.0)):
+                    highlight_seat = str(highlight_info.get("seat", ""))
+                else:
+                    st.session_state.pop("seating_recent_highlight", None)
+
             aisle_header_cols = st.columns([1, 1, 0.14, 1, 1, 0.14, 1, 1, 0.14, 1, 1], gap="small")
             for group_idx, col_pos in enumerate([0, 3, 6, 9]):
                 with aisle_header_cols[col_pos]:
@@ -1847,11 +1874,14 @@ if st.session_state.view_mode == "admin":
                     cur_score = int(state["scores"].get(seat_str, 0))
 
                     with row_cols[target_col_idx]:
+                        is_recent_hit = (seat_str == highlight_seat)
                         if stu_info:
                             cls_label = stu_info.get("class_name", "") or "　"
                             name_label = stu_info.get("name", "") or "未命名"
                             card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-box"
-                            score_badge_bg = "#d97706" if cur_score > 0 else "#64748b"
+                            if is_recent_hit:
+                                card_cls += " recent-hit"
+                            score_badge_bg = "#b45309" if is_recent_hit else ("#d97706" if cur_score > 0 else "#64748b")
                             st.markdown(
                                 f'<div class="{card_cls}">'
                                 f'<div style="font-size:0.72rem; font-weight:400; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{cls_label}</div>'
@@ -1882,18 +1912,22 @@ if st.session_state.view_mode == "admin":
                                     st.rerun(scope="fragment")
                         else:
                             card_cls = "seat-card-box has-score" if cur_score > 0 else "seat-card-empty"
+                            if is_recent_hit:
+                                card_cls += " recent-hit"
                             if cur_score > 0:
+                                badge_bg_empty = "#b45309" if is_recent_hit else "#d97706"
                                 st.markdown(
                                     f'<div class="{card_cls}">'
                                     f'<div style="font-size:0.72rem; font-weight:400; color:#64748b;">空位 / 未建檔</div>'
                                     f'<div style="font-size:1.3rem; font-weight:500; color:#0f172a; line-height:1.15; margin:2px 0;">{seat_str}</div>'
-                                    f'<div style="margin-top:6px;"><span style="background:#d97706; color:#ffffff; font-size:0.9rem; font-weight:800; padding:3px 10px; border-radius:999px; display:inline-block;">今日 {cur_score} 分</span></div>'
+                                    f'<div style="margin-top:6px;"><span style="background:{badge_bg_empty}; color:#ffffff; font-size:0.9rem; font-weight:800; padding:3px 10px; border-radius:999px; display:inline-block;">今日 {cur_score} 分</span></div>'
                                     f'</div>',
                                     unsafe_allow_html=True,
                                 )
                             else:
+                                hit_txt_color = "#0f172a" if is_recent_hit else "#94a3b8"
                                 st.markdown(
-                                    f'<div class="seat-card-empty"><div style="font-size:1.15rem; font-weight:500; color:#94a3b8;">{seat_str}</div><div>空位</div></div>',
+                                    f'<div class="{card_cls}"><div style="font-size:1.15rem; font-weight:500; color:{hit_txt_color};">{seat_str}</div><div>空位</div></div>',
                                     unsafe_allow_html=True,
                                 )
                             b_add, b_sub = st.columns([1.3, 1.0], gap="small")
