@@ -2400,39 +2400,17 @@ if st.session_state.view_mode == "admin":
 
         with st.container(border=True):
             st.markdown("#### 📱 學生手機掃碼加入")
-            saved_share_url = str(state.get("student_share_url", "https://class-draw-zxzusy7bhdm3mshdzj5yxf.streamlit.app/")).strip().split("?")[0].split("#")[0]
-            if "student_url_input" not in st.session_state or not st.session_state.student_url_input:
-                st.session_state.student_url_input = saved_share_url
-
-            url_c1, url_c2 = st.columns([3.2, 1.2])
-            with url_c1:
-                share_url = st.text_input(
-                    "學生端網址（自動過濾參數，確保掃碼直接進入學生端）",
-                    key="student_url_input",
-                    label_visibility="collapsed",
-                    placeholder="輸入學生端網址，例如 https://...",
-                )
-            with url_c2:
-                apply_url_clicked = st.button("套用網址", use_container_width=True, key="apply_student_qr_url_btn")
-
-            clean_input_url = share_url.strip().split("?")[0].split("#")[0]
-            if apply_url_clicked or (clean_input_url and clean_input_url != saved_share_url):
-                if clean_input_url:
-                    with state["lock"]:
-                        state["student_share_url"] = clean_input_url
-                        save_persisted_state(state)
-                    saved_share_url = clean_input_url
-                    if apply_url_clicked:
-                        st.toast("✅ 已更新學生端網址與 QR Code！")
-
-            active_qr_url = saved_share_url or clean_input_url
-            if active_qr_url:
-                qr_b64 = generate_qr_base64(active_qr_url)
-                st.markdown(
-                    f'<div style="text-align:center; padding:4px 0;"><img src="data:image/png;base64,{qr_b64}" width="150" style="border-radius:12px; border:1px solid #e2e8f0; padding:6px; background:#fff;"/></div>',
-                    unsafe_allow_html=True,
-                )
-                st.caption(f"🔗 QR Code 實際指向：`{active_qr_url}`")
+            FIXED_STUDENT_URL = "https://class-draw-zxzusy7bhdm3mshdzj5yxf.streamlit.app/"
+            if state.get("student_share_url") != FIXED_STUDENT_URL:
+                with state["lock"]:
+                    state["student_share_url"] = FIXED_STUDENT_URL
+                    save_persisted_state(state)
+            qr_b64 = generate_qr_base64(FIXED_STUDENT_URL)
+            st.markdown(
+                f'<div style="text-align:center; padding:6px 0;"><img src="data:image/png;base64,{qr_b64}" width="168" style="border-radius:12px; border:1px solid #e2e8f0; padding:8px; background:#fff;"/></div>',
+                unsafe_allow_html=True,
+            )
+            st.caption(f"🔗 學生端固定網址：`{FIXED_STUDENT_URL}`")
 
     # 固定在整個頁面最底部（左右兩欄之外）播放中獎音效
     if st.session_state.play_fanfare_once:
